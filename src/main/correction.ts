@@ -30,6 +30,10 @@ export const CORRECTION_SYSTEM_PROMPT =
   'preferring the exact spelling used on the slides when present ' +
   '(e.g. 러닝 레이트 -> learning rate). ' +
   'Keep Korean words that are normal Korean (e.g. 학습률, 손실 함수 stay).\n' +
+  'Keep everyday loanwords that Koreans normally write in Hangul (e.g. 업데이트, 모델, 데이터, 코사인 곡선 stay); ' +
+  'only convert technical terms that the slides spell in English or that are clearly jargon.\n' +
+  'If a longer phrase contains a shorter one (러닝 레이트 스케줄링 vs 러닝 레이트), propose only the longer phrase for that occurrence.\n' +
+  'Never delete a whole segment; for duplicates remove only the repeated words.\n' +
   '(2) duplicate: accidental repeated words (e.g. 레이어로 레이어로 -> 레이어로).\n' +
   '(3) typo: obvious misrecognitions with a clear intended word (e.g. 손실 합수 -> 손실 함수).\n' +
   'Never paraphrase, never add or remove meaning, never change numbers. ' +
