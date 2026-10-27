@@ -136,7 +136,80 @@ button:hover {
 }
 
 .content-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 16px;
+}
+
+.summary-progress {
+  font-size: 13px;
+  color: #9a6a00;
+}
+
+.summary {
+  background: #ffffff;
+  border: 1px solid #e4e4e8;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 14px;
+}
+
+.summary-counts {
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 8px;
+}
+
+.claims {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.claim {
+  padding: 6px 0;
+  border-top: 1px solid #f0f0f2;
+}
+
+.claim:first-child {
+  border-top: none;
+}
+
+.claim-unsupported {
+  color: #888;
+}
+
+.badge-unsupported {
+  display: inline-block;
+  font-size: 11px;
+  border-radius: 10px;
+  padding: 1px 8px;
+  background: #fdecea;
+  color: #b3261e;
+  white-space: nowrap;
+}
+
+.claim-reason {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #b3261e;
+}
+
+.cite-chip {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: #1a56db;
+  padding: 1px 8px;
+  margin: 0 2px;
+  cursor: pointer;
+}
+
+.segments li.highlight {
+  background: #fff4e0;
+  border-radius: 4px;
 }
 
 .empty {

@@ -2,6 +2,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { getMetaApiKey } from './apikey'
 import {
+  chatCostUsd,
+  estimateChatCostUsd,
   estimateTranscribeCostUsd,
   TRANSCRIBE_MODEL,
   transcribeCostUsd,
@@ -23,6 +25,10 @@ import { parseTranscribeResponse, type TranscribeResult } from './transcribe'
 
 const API_BASE = 'https://api.meta.ai'
 const TRANSCRIBE_TIMEOUT_MS = 10 * 60 * 1000
+const CHAT_TIMEOUT_MS = 5 * 60 * 1000
+
+/** Default chat model for summarization and verification. */
+export const CHAT_MODEL = 'muse-spark-1.3'
 
 export interface MetaApiDeps {
   ledger: LedgerStore
@@ -39,8 +45,26 @@ export interface TranscribeChunkOptions {
   fileName?: string
 }
 
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
+export interface ChatOptions {
+  messages: ChatMessage[]
+  model?: string
+  /** When set, sent as a strict json_schema response_format; reply is parsed as JSON. */
+  responseFormat?: { name: string; schema: unknown }
+}
+
 export interface MetaApi {
   transcribeChunk(opts: TranscribeChunkOptions): Promise<TranscribeResult>
+  /**
+   * Chat completion. With responseFormat the reply content is parsed as JSON
+   * (throws a Korean error when it is not valid JSON); otherwise the raw
+   * content string is returned.
+   */
+  chat(opts: ChatOptions): Promise<unknown>
 }
 
 /** Removes the API key from any text so it can never leak via errors. */
@@ -110,5 +134,107 @@ export function createMetaApi(deps: MetaApiDeps): MetaApi {
     return parsed
   }
 
-  return { transcribeChunk }
+  async function chat(opts: ChatOptions): Promise<unknown> {
+    const model = opts.model ?? CHAT_MODEL
+    // 1. Budget gate: conservative estimate BEFORE any network traffic.
+    const promptChars = opts.messages.reduce((sum, m) => sum + m.content.length, 0)
+    const estimate = estimateChatCostUsd(model, promptChars)
+    deps.ledger.assertCanSpend(estimate)
+
+    const key = await getKey()
+
+    const body: Record<string, unknown> = { model, messages: opts.messages }
+    if (opts.responseFormat) {
+      body.response_format = {
+        type: 'json_schema',
+        json_schema: { name: opts.responseFormat.name, schema: opts.responseFormat.schema, strict: true },
+      }
+    }
+
+    let res: Response
+    try {
+      res = await fetchImpl(`${API_BASE}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
+      })
+    } catch (err) {
+      // Network/timeout failure: nothing is recorded.
+      const msg = err instanceof Error ? err.message : String(err)
+      throw new Error(`요약 API 호출 실패: ${redact(msg, key)}`)
+    }
+
+    if (!res.ok) {
+      // No successful completion happened: nothing is recorded.
+      const text = await res.text().catch(() => '')
+      const snippet = redact(text.slice(0, 500), key)
+      throw new Error(`요약 API 오류 (HTTP ${res.status}): ${snippet}`)
+    }
+
+    // 3. HTTP 200: parse the reply, then record actual token usage.
+    const parsed = (await res.json()) as {
+      choices?: Array<{ message?: { content?: unknown } }>
+      usage?: {
+        prompt_tokens?: unknown
+        completion_tokens?: unknown
+        completion_tokens_details?: { reasoning_tokens?: unknown }
+      }
+    }
+    const content = parsed.choices?.[0]?.message?.content
+    if (typeof content !== 'string') {
+      throw new Error('요약 API 응답에 내용이 없습니다.')
+    }
+
+    recordChatUsage(deps.ledger, model, parsed.usage, estimate)
+
+    if (opts.responseFormat) {
+      try {
+        return JSON.parse(content) as unknown
+      } catch {
+        throw new Error('요약 API 응답이 JSON 형식이 아닙니다.')
+      }
+    }
+    return content
+  }
+
+  return { transcribeChunk, chat }
+}
+
+interface ChatUsage {
+  prompt_tokens?: unknown
+  completion_tokens?: unknown
+  completion_tokens_details?: { reasoning_tokens?: unknown }
+}
+
+/** Records a successful chat call; falls back to the estimate when usage is missing. */
+function recordChatUsage(
+  ledger: LedgerStore,
+  model: string,
+  usage: ChatUsage | undefined,
+  estimate: number,
+): void {
+  const promptTokens = asNonNegativeInt(usage?.prompt_tokens)
+  const completionTokens = asNonNegativeInt(usage?.completion_tokens)
+  const reasoningTokens = asNonNegativeInt(usage?.completion_tokens_details?.reasoning_tokens) ?? 0
+  if (promptTokens === null || completionTokens === null) {
+    // Fail safe: a successful call must never be recorded as $0.
+    ledger.record({ kind: 'chat', model, usd: estimate })
+    return
+  }
+  ledger.record({
+    kind: 'chat',
+    model,
+    promptTokens,
+    completionTokens,
+    reasoningTokens,
+    usd: chatCostUsd(model, promptTokens, completionTokens, reasoningTokens),
+  })
+}
+
+function asNonNegativeInt(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null
 }

@@ -42,6 +42,46 @@ export interface ProgressEvent {
   message?: string
 }
 
+export type SummaryStatus = 'summarizing' | 'verifying' | 'done' | 'error'
+
+export type ClaimVerdict = 'pending' | 'supported' | 'unsupported'
+
+/** One cited transcript segment attached to a claim. */
+export interface ClaimCitation {
+  segmentId: number
+  startMs: number
+  endMs: number
+  text: string
+  sourceDisplayName: string
+}
+
+export interface Claim {
+  id: number
+  idx: number
+  text: string
+  verdict: ClaimVerdict
+  reason: string | null
+  citations: ClaimCitation[]
+}
+
+export interface Summary {
+  id: number
+  noteId: number
+  model: string
+  status: SummaryStatus
+  error: string | null
+  createdAt: string
+  claims: Claim[]
+}
+
+/** Sent over the `summary:progress` IPC channel. */
+export interface SummaryProgressEvent {
+  noteId: number
+  summaryId: number | null
+  stage: SummaryStatus
+  message?: string
+}
+
 /** API exposed to the renderer as `window.sourcenote`. */
 export interface SourcenoteApi {
   listNotes(): Promise<Note[]>
@@ -52,4 +92,8 @@ export interface SourcenoteApi {
   listSegments(sourceId: number): Promise<Segment[]>
   getSpend(): Promise<{ spentUsd: number; capUsd: number }>
   onProgress(cb: (event: ProgressEvent) => void): () => void
+  /** Starts the citation-enforced summary pipeline in the background. */
+  runSummary(noteId: number): Promise<void>
+  getLatestSummary(noteId: number): Promise<Summary | null>
+  onSummaryProgress(cb: (event: SummaryProgressEvent) => void): () => void
 }

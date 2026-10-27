@@ -9,6 +9,7 @@ import { budgetCapUsd, LedgerStore } from './budget'
 import {
   createNote,
   createSource,
+  getLatestSummary,
   listNotes,
   listSegments,
   listSources,
@@ -16,8 +17,9 @@ import {
 } from './db'
 import { createMetaApi } from './meta-api'
 import { runAudioPipeline } from './pipeline'
+import { runSummaryPipeline } from './summary-pipeline'
 import { dbFilePath, ensureDataDir, ledgerFilePath, mediaDirPath } from './paths'
-import type { ProgressEvent } from '../shared/types'
+import type { ProgressEvent, SummaryProgressEvent } from '../shared/types'
 
 // electron-vite injects the CommonJS `__dirname` shim into ESM main builds.
 
@@ -32,6 +34,10 @@ const metaApi = createMetaApi({ ledger })
 
 function sendProgress(win: BrowserWindow | null, event: ProgressEvent): void {
   win?.webContents.send('pipeline:progress', event)
+}
+
+function sendSummaryProgress(win: BrowserWindow | null, event: SummaryProgressEvent): void {
+  win?.webContents.send('summary:progress', event)
 }
 
 function registerIpc(getWindow: () => BrowserWindow | null): void {
@@ -51,6 +57,25 @@ function registerIpc(getWindow: () => BrowserWindow | null): void {
   )
 
   ipcMain.handle('budget:getSpend', () => ({ spentUsd: ledger.totalUsd, capUsd: budgetCapUsd() }))
+
+  ipcMain.handle('summary:getLatest', (_e, noteId: unknown) =>
+    typeof noteId === 'number' ? getLatestSummary(db, noteId) : null,
+  )
+
+  ipcMain.handle('summary:run', (_e, noteId: unknown) => {
+    if (typeof noteId !== 'number') return
+    // Long-running: start in background; progress arrives via summary:progress.
+    void runSummaryPipeline(
+      {
+        db,
+        metaApi,
+        onProgress: (event) => sendSummaryProgress(getWindow(), event),
+      },
+      noteId,
+    ).catch(() => {
+      // Status/message already stored on the summary and sent via progress.
+    })
+  })
 
   ipcMain.handle('sources:addAudio', async (_e, noteId: unknown) => {
     if (typeof noteId !== 'number') return null

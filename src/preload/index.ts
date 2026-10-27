@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { ProgressEvent, SourcenoteApi } from '../shared/types'
+import type { ProgressEvent, SourcenoteApi, SummaryProgressEvent } from '../shared/types'
 
 const api: SourcenoteApi = {
   listNotes: () => ipcRenderer.invoke('notes:list'),
@@ -15,6 +15,17 @@ const api: SourcenoteApi = {
     ipcRenderer.on('pipeline:progress', listener)
     return () => {
       ipcRenderer.removeListener('pipeline:progress', listener)
+    }
+  },
+  runSummary: (noteId) => ipcRenderer.invoke('summary:run', noteId),
+  getLatestSummary: (noteId) => ipcRenderer.invoke('summary:getLatest', noteId),
+  onSummaryProgress: (cb) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: SummaryProgressEvent): void => {
+      cb(payload)
+    }
+    ipcRenderer.on('summary:progress', listener)
+    return () => {
+      ipcRenderer.removeListener('summary:progress', listener)
     }
   },
 }

@@ -1,0 +1,127 @@
+import type { DatabaseSync } from 'node:sqlite'
+import type { Summary, SummaryProgressEvent } from '../shared/types'
+import {
+  createSummary,
+  getLatestSummary,
+  insertClaimsWithCitations,
+  listNoteSegments,
+  setClaimVerdict,
+  setSummaryStatus,
+  type NewClaim,
+} from './db'
+import {
+  applyVerifyResults,
+  buildSummaryMessages,
+  buildVerifyMessages,
+  DEFAULT_SUMMARY_MODEL,
+  idByNumberMap,
+  mapSummaryClaims,
+  numberSegments,
+  splitBatches,
+  SUMMARY_SCHEMA,
+  SUMMARY_SCHEMA_NAME,
+  validateSummaryPayload,
+  validateVerifyPayload,
+  VERIFY_SCHEMA,
+  VERIFY_SCHEMA_NAME,
+  ZERO_CITATION_REASON,
+  type VerifyItem,
+} from './grounding'
+import type { MetaApi } from './meta-api'
+
+/**
+ * Stage-2 pipeline: note segments -> cited summary claims -> per-claim
+ * verification against ONLY the cited segments. Unsupported sentences are
+ * never shown as fact; they are stored with verdict 'unsupported'.
+ */
+
+export interface SummaryPipelineDeps {
+  db: DatabaseSync
+  metaApi: MetaApi
+  model?: string
+  onProgress?: (event: SummaryProgressEvent) => void
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
+
+export async function runSummaryPipeline(
+  deps: SummaryPipelineDeps,
+  noteId: number,
+): Promise<Summary> {
+  const { db, metaApi, onProgress } = deps
+  const model = deps.model ?? DEFAULT_SUMMARY_MODEL
+
+  const segments = listNoteSegments(db, noteId)
+  if (segments.length === 0) {
+    throw new Error('요약할 전사 구간이 없습니다')
+  }
+
+  const summary = createSummary(db, noteId, model)
+  const report = (stage: SummaryProgressEvent['stage'], message?: string): void => {
+    onProgress?.({ noteId, summaryId: summary.id, stage, message })
+  }
+
+  try {
+    // 1. Summarize with citations.
+    report('summarizing')
+    const numbered = numberSegments(segments)
+    const byNumber = idByNumberMap(numbered)
+    const summaryRaw = await metaApi.chat({
+      model,
+      messages: buildSummaryMessages(numbered),
+      responseFormat: { name: SUMMARY_SCHEMA_NAME, schema: SUMMARY_SCHEMA },
+    })
+    const mapped = mapSummaryClaims(validateSummaryPayload(summaryRaw), byNumber)
+
+    // Zero-citation claims are stored as unsupported and skip verification.
+    const toInsert: NewClaim[] = mapped.map((c) => ({
+      idx: c.idx,
+      text: c.text,
+      verdict: c.segmentDbIds.length === 0 ? 'unsupported' : ('pending' as const),
+      reason: c.segmentDbIds.length === 0 ? ZERO_CITATION_REASON : null,
+      segmentIds: c.segmentDbIds,
+    }))
+    const claimIds = insertClaimsWithCitations(db, summary.id, toInsert)
+    const claimIdByIdx = new Map(mapped.map((c, i) => [c.idx, claimIds[i]]))
+    const textByDbId = new Map(segments.map((s) => [s.id, s.text]))
+
+    // 2. Verify each cited claim against ONLY its cited segments, in batches.
+    report('verifying')
+    const verifiable = mapped.filter((c) => c.segmentDbIds.length > 0)
+    for (const batch of splitBatches(verifiable)) {
+      const items: VerifyItem[] = batch.map((c) => ({
+        claimIdx: c.idx,
+        text: c.text,
+        citedTexts: c.segmentDbIds.map((id) => textByDbId.get(id) ?? ''),
+      }))
+      const verifyRaw = await metaApi.chat({
+        model,
+        messages: buildVerifyMessages(items),
+        responseFormat: { name: VERIFY_SCHEMA_NAME, schema: VERIFY_SCHEMA },
+      })
+      const resolved = applyVerifyResults(
+        items.map((item) => item.claimIdx),
+        validateVerifyPayload(verifyRaw),
+      )
+      for (const r of resolved) {
+        const claimId = claimIdByIdx.get(r.claimIdx)
+        if (claimId === undefined) continue
+        setClaimVerdict(db, claimId, r.supported ? 'supported' : 'unsupported', r.reason)
+      }
+    }
+
+    setSummaryStatus(db, summary.id, 'done')
+    report('done')
+
+    const done = getLatestSummary(db, noteId)
+    if (!done) throw new Error('요약 결과를 찾을 수 없습니다.')
+    return done
+  } catch (err) {
+    const message = errorMessage(err)
+    setSummaryStatus(db, summary.id, 'error', message)
+    report('error', message)
+    throw err
+  }
+}

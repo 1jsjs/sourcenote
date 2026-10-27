@@ -1,5 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
-import type { Note, ProgressEvent, Segment, Source, SourceStatus } from '../../shared/types'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type {
+  Note,
+  ProgressEvent,
+  Segment,
+  Source,
+  SourceStatus,
+  Summary,
+  SummaryProgressEvent,
+} from '../../shared/types'
 
 const STATUS_LABEL: Record<SourceStatus, string> = {
   pending: '대기',
@@ -27,6 +35,11 @@ export default function App() {
   const [progressBySource, setProgressBySource] = useState<Record<number, ProgressEvent>>({})
   const [newTitle, setNewTitle] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [summary, setSummary] = useState<Summary | null>(null)
+  const [summaryRunning, setSummaryRunning] = useState(false)
+  const [summaryStage, setSummaryStage] = useState<SummaryProgressEvent['stage'] | null>(null)
+  const [highlightedSegmentId, setHighlightedSegmentId] = useState<number | null>(null)
+  const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const refreshSpend = useCallback(async () => {
     setSpend(await window.sourcenote.getSpend())
@@ -54,13 +67,22 @@ export default function App() {
     void refreshSpend()
   }, [refreshNotes, refreshSpend])
 
+  const refreshSummary = useCallback(async (noteId: number) => {
+    setSummary(await window.sourcenote.getLatestSummary(noteId))
+  }, [])
+
   useEffect(() => {
-    if (selectedNoteId !== null) void refreshSources(selectedNoteId)
-    else {
+    if (selectedNoteId !== null) {
+      void refreshSources(selectedNoteId)
+      void refreshSummary(selectedNoteId)
+    } else {
       setSources([])
       setSegmentsBySource({})
+      setSummary(null)
     }
-  }, [selectedNoteId, refreshSources])
+    setSummaryRunning(false)
+    setSummaryStage(null)
+  }, [selectedNoteId, refreshSources, refreshSummary])
 
   useEffect(() => {
     const unsubscribe = window.sourcenote.onProgress((event) => {
@@ -73,6 +95,27 @@ export default function App() {
     })
     return unsubscribe
   }, [selectedNoteId, refreshSources, refreshSpend])
+
+  useEffect(() => {
+    const unsubscribe = window.sourcenote.onSummaryProgress((event) => {
+      if (event.noteId !== selectedNoteId) return
+      setSummaryStage(event.stage)
+      if (event.stage === 'done' || event.stage === 'error') {
+        setSummaryRunning(false)
+        if (event.stage === 'error' && event.message) setError(event.message)
+        void refreshSummary(event.noteId)
+        void refreshSpend()
+      }
+    })
+    return unsubscribe
+  }, [selectedNoteId, refreshSummary, refreshSpend])
+
+  useEffect(
+    () => () => {
+      if (highlightTimer.current !== null) clearTimeout(highlightTimer.current)
+    },
+    [],
+  )
 
   const handleCreateNote = async (): Promise<void> => {
     const title = newTitle.trim()
@@ -96,6 +139,30 @@ export default function App() {
       if (source) await refreshSources(selectedNoteId)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const handleRunSummary = async (): Promise<void> => {
+    if (selectedNoteId === null) return
+    setError(null)
+    setSummaryRunning(true)
+    setSummaryStage('summarizing')
+    try {
+      await window.sourcenote.runSummary(selectedNoteId)
+    } catch (err) {
+      setSummaryRunning(false)
+      setSummaryStage(null)
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const handleCiteClick = (segmentId: number): void => {
+    const element = document.getElementById(`segment-${segmentId}`)
+    if (element) {
+      element.scrollIntoView({ block: 'center' })
+      setHighlightedSegmentId(segmentId)
+      if (highlightTimer.current !== null) clearTimeout(highlightTimer.current)
+      highlightTimer.current = setTimeout(() => setHighlightedSegmentId(null), 2000)
     }
   }
 
@@ -152,7 +219,55 @@ export default function App() {
             <>
               <div className="content-actions">
                 <button onClick={() => void handleAddAudio()}>오디오 파일 추가</button>
+                <button
+                  onClick={() => void handleRunSummary()}
+                  disabled={summaryRunning || !sources.some((s) => s.status === 'done')}
+                >
+                  근거 요약 만들기
+                </button>
+                {summaryRunning && (
+                  <span className="summary-progress">
+                    {summaryStage === 'verifying' ? '검증 중…' : '요약 중…'}
+                  </span>
+                )}
               </div>
+              {summary !== null && summary.claims.length > 0 && (
+                <section className="summary">
+                  <div className="summary-counts">
+                    검증됨{' '}
+                    {summary.claims.filter((c) => c.verdict === 'supported').length} · 자료에
+                    없음 {summary.claims.filter((c) => c.verdict === 'unsupported').length}
+                  </div>
+                  <ul className="claims">
+                    {summary.claims.map((claim) => (
+                      <li
+                        key={claim.id}
+                        className={
+                          claim.verdict === 'unsupported' ? 'claim claim-unsupported' : 'claim'
+                        }
+                      >
+                        <span className="claim-text">{claim.text}</span>{' '}
+                        {claim.verdict === 'unsupported' && (
+                          <span className="badge-unsupported">자료에 없음</span>
+                        )}{' '}
+                        {claim.citations.map((cite) => (
+                          <button
+                            key={cite.segmentId}
+                            className="cite-chip"
+                            title={cite.text}
+                            onClick={() => handleCiteClick(cite.segmentId)}
+                          >
+                            {formatHms(cite.startMs)}
+                          </button>
+                        ))}
+                        {claim.verdict === 'unsupported' && claim.reason !== null && (
+                          <div className="claim-reason">{claim.reason}</div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
               {sources.length === 0 && <p className="empty">추가된 오디오가 없습니다.</p>}
               {sources.map((source) => {
                 const progress = progressBySource[source.id]
@@ -177,7 +292,12 @@ export default function App() {
                     {segments.length > 0 && (
                       <ul className="segments">
                         {segments.map((seg) => (
-                          <li key={seg.id}>
+                          <li
+                            key={seg.id}
+                            id={`segment-${seg.id}`}
+                            data-segment-id={seg.id}
+                            className={seg.id === highlightedSegmentId ? 'highlight' : undefined}
+                          >
                             <span className="seg-time">
                               [{formatHms(seg.start_ms)}–{formatHms(seg.end_ms)}]
                             </span>{' '}
