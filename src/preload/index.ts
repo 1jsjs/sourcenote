@@ -1,8 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
+  AppSettings,
   CorrectionProgressEvent,
+  Note,
   NotePage,
   ProgressEvent,
+  SampleInfo,
   Source,
   SourcenoteApi,
   SummaryProgressEvent,
@@ -53,6 +56,10 @@ const api: SourcenoteApi = {
   },
   runCheck: (noteId, text) => ipcRenderer.invoke('check:run', noteId, text),
   getLatestCheck: (noteId) => ipcRenderer.invoke('check:getLatest', noteId),
+  getSettings: () => ipcRenderer.invoke('settings:get'),
+  setSettings: (patch): Promise<AppSettings> => ipcRenderer.invoke('settings:set', patch),
+  listSamples: (): Promise<SampleInfo[]> => ipcRenderer.invoke('samples:list'),
+  importSample: (name): Promise<Note> => ipcRenderer.invoke('samples:import', name),
 }
 
 contextBridge.exposeInMainWorld('sourcenote', api)

@@ -21,6 +21,17 @@ What it does today:
 - **Jump to the source**: click a time chip to play the lecture from that moment, or a
   page chip to open the slide.
 - **Budget guard**: every API call is checked against a local spend cap.
+- **Korean / English**: the `한국어 | English` toggle in the header switches the
+  whole UI and the AI output language together (claims, reasons, prompts).
+  The choice is stored in `settings.json` next to the database; existing
+  summaries keep the language they were written in.
+- **Parallel transcription**: lecture chunks are transcribed 3 at a time
+  (override with `SOURCENOTE_TRANSCRIBE_CONCURRENCY=1..6`); progress reads
+  `Transcribing 3/9`.
+- **Sample notes**: no API key? Click **Open sample note** in the sidebar
+  (or pick one from the empty-state card) to import a bundled lecture with
+  transcript, slides, corrections and a verified summary — everything works
+  offline except calls that need the API.
 
 Built during the Meta Global AI Developer Hackathon (Oct 27 – Nov 5, 2026).
 
@@ -67,6 +78,17 @@ npm run summarize -- <noteId>              # cited summary + verification
 npm run check -- <noteId> "문장1" "문장2"     # verify your own notes
 ```
 
+All four `pipeline` / `summarize` / `correct` / `check` commands accept
+`--lang ko|en` (default: the saved app setting, else Korean) to switch the
+AI output language and CLI labels.
+
+Export a note as a shareable sample (writes `<outDir>/note.json` plus the
+source files; only the latest summary of each kind is included):
+
+```sh
+npm run export-sample -- <noteId> <outDir>
+```
+
 Try it with the original sample lecture in [`samples/`](samples/README.md).
 
 Other scripts: `npm test` (vitest), `npm run typecheck`, `npm run build`.
@@ -89,8 +111,9 @@ header shows current spend (`$x.xxxx / $100`).
 ## Data
 
 Stored in Electron's `userData` directory (or `SOURCENOTE_DATA_DIR` when set):
-`sourcenote.sqlite` (notes, sources, segments, slide pages, summaries, claims, citations, corrections), `usage-ledger.json`, `media/`
-(converted 16 kHz mono WAV chunks).
+`sourcenote.sqlite` (notes, sources, segments, slide pages, summaries, claims, citations, corrections), `usage-ledger.json`, `settings.json`
+(app language), `media/` (converted 16 kHz mono WAV chunks), `samples/`
+(imported sample-note copies).
 
 ## License
 

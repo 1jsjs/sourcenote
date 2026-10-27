@@ -28,13 +28,21 @@ import {
   listSources,
   openDb,
 } from './db'
+import { langMsg } from './lang'
 import { mediaContentTypeForPath, parseMediaSourceUrl, parseRangeHeader } from './media'
 import { createMetaApi } from './meta-api'
 import { ingestPdfSource } from './pdf'
 import { runAudioPipeline } from './pipeline'
+import { importSampleNote, listSampleNotes, resolveSamplesDir } from './sample'
+import { loadSettings, parseSettings, saveSettings } from './settings'
 import { runSummaryPipeline } from './summary-pipeline'
-import { dbFilePath, ensureDataDir, ledgerFilePath, mediaDirPath } from './paths'
-import type { CorrectionProgressEvent, ProgressEvent, SummaryProgressEvent } from '../shared/types'
+import { dbFilePath, ensureDataDir, ledgerFilePath, mediaDirPath, settingsFilePath } from './paths'
+import type {
+  AppLanguage,
+  CorrectionProgressEvent,
+  ProgressEvent,
+  SummaryProgressEvent,
+} from '../shared/types'
 
 // Must run before app ready so the scheme is treated as privileged.
 protocol.registerSchemesAsPrivileged([
@@ -134,7 +142,15 @@ async function handleMediaRequest(req: Request): Promise<Response> {
 const dataDir = ensureDataDir()
 const db = openDb(dbFilePath(dataDir))
 const ledger = new LedgerStore(ledgerFilePath(dataDir))
-const metaApi = createMetaApi({ ledger })
+const settingsPath = settingsFilePath(dataDir)
+/** Current app language; read live so a toggle applies to the next call. */
+const currentLanguage = (): AppLanguage => loadSettings(settingsPath).language
+const metaApi = createMetaApi({ ledger, getLanguage: currentLanguage })
+const samplesDir = resolveSamplesDir({
+  appPath: app.getAppPath(),
+  resourcesPath: process.resourcesPath,
+  packaged: app.isPackaged,
+})
 
 function sendProgress(win: BrowserWindow | null, event: ProgressEvent): void {
   win?.webContents.send('pipeline:progress', event)
@@ -151,8 +167,32 @@ function sendCorrectionProgress(win: BrowserWindow | null, event: CorrectionProg
 function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('notes:list', () => listNotes(db))
 
+  ipcMain.handle('settings:get', () => loadSettings(settingsPath))
+
+  ipcMain.handle('settings:set', (_e, patch: unknown) => {
+    const current = loadSettings(settingsPath)
+    const extra =
+      patch !== null && typeof patch === 'object' && !Array.isArray(patch)
+        ? (patch as Record<string, unknown>)
+        : {}
+    return saveSettings(settingsPath, parseSettings({ ...current, ...extra }))
+  })
+
+  ipcMain.handle('samples:list', () => listSampleNotes(samplesDir))
+
+  ipcMain.handle('samples:import', (_e, name: unknown) => {
+    if (typeof name !== 'string' || !listSampleNotes(samplesDir).some((s) => s.name === name)) {
+      throw new Error(
+        langMsg(currentLanguage(), '샘플 노트를 찾을 수 없습니다.', 'Sample note not found.'),
+      )
+    }
+    const note = importSampleNote(db, path.join(samplesDir, name), dataDir)
+    return note
+  })
+
   ipcMain.handle('notes:create', (_e, title: unknown) => {
-    const t = typeof title === 'string' && title.trim().length > 0 ? title.trim() : '새 노트'
+    const fallback = langMsg(currentLanguage(), '새 노트', 'New note')
+    const t = typeof title === 'string' && title.trim().length > 0 ? title.trim() : fallback
     return createNote(db, t)
   })
 
@@ -223,6 +263,7 @@ function registerIpc(getWindow: () => BrowserWindow | null): void {
       {
         db,
         metaApi,
+        language: currentLanguage(),
         onProgress: (event) => sendSummaryProgress(getWindow(), event),
       },
       noteId,
@@ -238,6 +279,7 @@ function registerIpc(getWindow: () => BrowserWindow | null): void {
       {
         db,
         metaApi,
+        language: currentLanguage(),
         onProgress: (event) => sendCorrectionProgress(getWindow(), event),
       },
       noteId,
@@ -252,7 +294,7 @@ function registerIpc(getWindow: () => BrowserWindow | null): void {
 
   ipcMain.handle('corrections:accept', (_e, id: unknown) => {
     if (typeof id !== 'number') throw new Error('교정 제안을 찾을 수 없습니다.')
-    return acceptCorrection(db, id)
+    return acceptCorrection(db, id, currentLanguage())
   })
 
   ipcMain.handle('corrections:reject', (_e, id: unknown) => {
@@ -268,7 +310,7 @@ function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('check:run', (_e, noteId: unknown, text: unknown) => {
     if (typeof noteId !== 'number') throw new Error('노트를 찾을 수 없습니다.')
     if (typeof text !== 'string') throw new Error('검증할 문장이 없습니다.')
-    return runCheckPipeline({ db, metaApi }, noteId, text)
+    return runCheckPipeline({ db, metaApi, language: currentLanguage() }, noteId, text)
   })
 
   ipcMain.handle('check:getLatest', (_e, noteId: unknown) =>

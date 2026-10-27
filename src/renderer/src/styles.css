@@ -129,6 +129,71 @@ button:hover {
   font-weight: 600;
 }
 
+.lang-toggle {
+  display: flex;
+  border: 1px solid #d0d0d4;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.lang-option {
+  border: none;
+  border-radius: 0;
+  padding: 6px 12px;
+  background: #ffffff;
+  color: #555;
+}
+
+.lang-option.selected {
+  background: #1a56db;
+  color: #ffffff;
+}
+
+.samples {
+  margin-top: 12px;
+  border-top: 1px solid #e0e0e2;
+  padding-top: 12px;
+}
+
+.samples > button {
+  width: 100%;
+}
+
+.sample-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sample-list button {
+  width: 100%;
+  text-align: left;
+}
+
+.empty-state {
+  max-width: 560px;
+  margin: 48px auto;
+  padding: 24px;
+  background: #ffffff;
+  border: 1px solid #e4e4e8;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.empty-hint {
+  color: #888;
+  font-size: 13px;
+}
+
+.section-title {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .content {
   flex: 1;
   padding: 16px 20px;

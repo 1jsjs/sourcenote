@@ -1,5 +1,6 @@
 import { DatabaseSync } from 'node:sqlite'
 import type {
+  AppLanguage,
   Claim,
   ClaimCitation,
   ClaimPageCitation,
@@ -12,6 +13,7 @@ import type {
   Summary,
   SummaryStatus,
 } from '../shared/types'
+import { isAppLanguage } from '../shared/types'
 
 /**
  * SQLite layer backed by Node's built-in `node:sqlite` (DatabaseSync).
@@ -114,6 +116,10 @@ const MIGRATIONS: string[] = [
   // version 5: user-notes check stored as kind='check' summaries (stage 4b)
   `
   ALTER TABLE summaries ADD COLUMN kind TEXT NOT NULL DEFAULT 'auto';
+  `,
+  // version 6: language the summary/check claims were written in (stage 5)
+  `
+  ALTER TABLE summaries ADD COLUMN language TEXT NOT NULL DEFAULT 'ko';
   `,
 ]
 
@@ -260,6 +266,7 @@ export interface SummaryRow {
   error: string | null
   created_at: string
   kind: string
+  language: string
 }
 
 export function createSummary(
@@ -267,13 +274,14 @@ export function createSummary(
   noteId: number,
   model: string,
   kind: 'auto' | 'check' = 'auto',
+  language: AppLanguage = 'ko',
 ): SummaryRow {
   const created = new Date().toISOString()
   const res = db
     .prepare(
-      'INSERT INTO summaries (note_id, model, status, error, created_at, kind) VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT INTO summaries (note_id, model, status, error, created_at, kind, language) VALUES (?, ?, ?, ?, ?, ?, ?)',
     )
-    .run(noteId, model, 'summarizing', null, created, kind)
+    .run(noteId, model, 'summarizing', null, created, kind, language)
   return {
     id: Number(res.lastInsertRowid),
     note_id: noteId,
@@ -282,6 +290,7 @@ export function createSummary(
     error: null,
     created_at: created,
     kind,
+    language,
   }
 }
 
@@ -409,6 +418,22 @@ export function insertPages(db: DatabaseSync, sourceId: number, pages: NewPage[]
 }
 
 /**
+ * All extracted pages of one source in page order (any status).
+ * Used by the sample-note exporter; the app UI uses listNotePages.
+ */
+export function listSourcePages(db: DatabaseSync, sourceId: number): NotePage[] {
+  const rows = db
+    .prepare(
+      'SELECT pg.id AS id, pg.source_id AS sourceId, pg.page_no AS pageNo, ' +
+        'pg.text AS text, src.display_name AS displayName ' +
+        'FROM pages pg JOIN sources src ON src.id = pg.source_id ' +
+        'WHERE pg.source_id = ? ORDER BY pg.page_no',
+    )
+    .all(sourceId) as unknown as NotePage[]
+  return rows
+}
+
+/**
  * All extracted pages of a note in order (PDF sources by id, then page_no).
  * Only sources with status 'done' are included.
  */
@@ -475,6 +500,11 @@ export function getLatestSummaryByKind(
     pageCitations: pageCiteStmt.all(c.id) as unknown as ClaimPageCitation[],
   }))
 
+  const language: AppLanguage = isAppLanguage(
+    (summary as { language?: unknown }).language,
+  )
+    ? (summary as { language?: AppLanguage }).language ?? 'ko'
+    : 'ko'
   return {
     id: summary.id,
     noteId: summary.note_id,
@@ -483,6 +513,7 @@ export function getLatestSummaryByKind(
     error: summary.error,
     createdAt: summary.created_at,
     kind: (summary.kind === 'check' ? 'check' : 'auto') as 'auto' | 'check',
+    language,
     claims,
   }
 }

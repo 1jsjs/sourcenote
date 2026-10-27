@@ -10,11 +10,12 @@ import { acceptAllCorrections, listCorrectionsDto, runCorrectionPipeline } from 
 import { openDb } from '../src/main/db'
 import { createMetaApi } from '../src/main/meta-api'
 import { dbFilePath, ensureDataDir, ledgerFilePath } from '../src/main/paths'
+import type { AppLanguage } from '../src/shared/types'
+import { parseLangArg, resolveCliLanguage } from './cli-lang'
 
-const KIND_LABEL: Record<string, string> = {
-  term: '용어',
-  duplicate: '중복',
-  typo: '오타',
+const KIND_LABEL: Record<AppLanguage, Record<string, string>> = {
+  ko: { term: '용어', duplicate: '중복', typo: '오타' },
+  en: { term: 'Term', duplicate: 'Repeat', typo: 'Typo' },
 }
 
 function formatHms(ms: number): string {
@@ -29,16 +30,19 @@ function parseArgs(argv: string[]): { noteId: number; acceptAll: boolean } {
   const acceptAll = argv.includes('--accept-all')
   const positional = argv.filter((a) => a !== '--accept-all')
   if (positional.length !== 1 || !/^\d+$/.test(positional[0])) {
-    console.error('사용법: npm run correct -- <noteId> [--accept-all]')
+    console.error('사용법: npm run correct -- <noteId> [--accept-all] [--lang ko|en]')
+    console.error('Usage: npm run correct -- <noteId> [--accept-all] [--lang ko|en]')
     process.exit(1)
   }
   return { noteId: Number(positional[0]), acceptAll }
 }
 
 async function main(): Promise<void> {
-  const { noteId, acceptAll } = parseArgs(process.argv.slice(2))
+  const { lang: langFlag, rest } = parseLangArg(process.argv.slice(2))
+  const { noteId, acceptAll } = parseArgs(rest)
 
   const dataDir = ensureDataDir()
+  const lang = resolveCliLanguage(langFlag, dataDir)
   const db = openDb(dbFilePath(dataDir))
   const ledger = new LedgerStore(ledgerFilePath(dataDir))
   const metaApi = createMetaApi({ ledger })
@@ -46,27 +50,34 @@ async function main(): Promise<void> {
   await runCorrectionPipeline({
     db,
     metaApi,
+    language: lang,
     onProgress: (event) => {
-      if (event.stage === 'correcting') console.log('교정 제안 생성 중...')
+      if (event.stage === 'correcting') {
+        console.log(lang === 'en' ? 'Suggesting fixes...' : '교정 제안 생성 중...')
+      }
     },
   }, noteId)
 
   if (acceptAll) {
     const { accepted } = acceptAllCorrections(db, noteId)
-    console.log(`모두 수락: ${accepted}건`)
+    console.log(lang === 'en' ? `Accepted all: ${accepted}` : `모두 수락: ${accepted}건`)
   }
 
   const corrections = listCorrectionsDto(db, noteId)
   if (corrections.length === 0) {
-    console.log('교정 제안이 없습니다.')
+    console.log(lang === 'en' ? 'No fix suggestions.' : '교정 제안이 없습니다.')
   }
   for (const c of corrections) {
-    const label = KIND_LABEL[c.kind] ?? c.kind
+    const label = KIND_LABEL[lang][c.kind] ?? c.kind
     console.log(
       `[${formatHms(c.startMs)}] ${c.beforeText} → ${c.afterText} (${label}) ${c.reason} [${c.status}]`,
     )
   }
-  console.log(`누적 사용액: $${ledger.totalUsd.toFixed(4)} / $${budgetCapUsd()}`)
+  console.log(
+    lang === 'en'
+      ? `Total spend: $${ledger.totalUsd.toFixed(4)} / $${budgetCapUsd()}`
+      : `누적 사용액: $${ledger.totalUsd.toFixed(4)} / $${budgetCapUsd()}`,
+  )
 }
 
 main().catch((err) => {

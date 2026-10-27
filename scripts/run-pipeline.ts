@@ -17,6 +17,8 @@ import {
 import { createMetaApi } from '../src/main/meta-api'
 import { runAudioPipeline } from '../src/main/pipeline'
 import { dbFilePath, ensureDataDir, ledgerFilePath, mediaDirPath } from '../src/main/paths'
+import type { AppLanguage } from '../src/shared/types'
+import { parseLangArg, resolveCliLanguage } from './cli-lang'
 
 function formatHms(ms: number): string {
   const totalSec = Math.max(0, Math.floor(ms / 1000))
@@ -37,7 +39,8 @@ function parseArgs(argv: string[]): { file: string; title: string } {
     }
   }
   if (positional.length !== 1) {
-    console.error('사용법: npm run pipeline -- <오디오 파일> [--title "노트 제목"]')
+    console.error('사용법: npm run pipeline -- <오디오 파일> [--title "노트 제목"] [--lang ko|en]')
+    console.error('Usage: npm run pipeline -- <audio file> [--title "title"] [--lang ko|en]')
     process.exit(1)
   }
   const file = path.resolve(positional[0])
@@ -49,15 +52,17 @@ function parseArgs(argv: string[]): { file: string; title: string } {
 }
 
 async function main(): Promise<void> {
-  const { file, title } = parseArgs(process.argv.slice(2))
+  const { lang: langFlag, rest } = parseLangArg(process.argv.slice(2))
+  const { file, title } = parseArgs(rest)
 
   const dataDir = ensureDataDir()
+  const lang: AppLanguage = resolveCliLanguage(langFlag, dataDir)
   const db = openDb(dbFilePath(dataDir))
   const ledger = new LedgerStore(ledgerFilePath(dataDir))
   const metaApi = createMetaApi({ ledger })
 
   const note = createNote(db, title)
-  console.log(`노트 생성: #${note.id} "${note.title}"`)
+  console.log(lang === 'en' ? `Note created: #${note.id} "${note.title}"` : `노트 생성: #${note.id} "${note.title}"`)
 
   const source = createSource(db, {
     noteId: note.id,
@@ -65,7 +70,11 @@ async function main(): Promise<void> {
     originalPath: file,
     displayName: path.basename(file),
   })
-  console.log(`소스 등록: #${source.id} ${source.display_name}`)
+  console.log(
+    lang === 'en'
+      ? `Source registered: #${source.id} ${source.display_name}`
+      : `소스 등록: #${source.id} ${source.display_name}`,
+  )
 
   await runAudioPipeline(
     {
@@ -74,9 +83,13 @@ async function main(): Promise<void> {
       mediaDir: mediaDirPath(dataDir),
       onProgress: (event) => {
         if (event.stage === 'transcribing') {
-          console.log(`전사 중... 청크 ${event.chunk}/${event.totalChunks}`)
+          console.log(
+            lang === 'en'
+              ? `Transcribing... chunk ${event.chunk}/${event.totalChunks}`
+              : `전사 중... 청크 ${event.chunk}/${event.totalChunks}`,
+          )
         } else {
-          console.log(`단계: ${event.stage}`)
+          console.log(lang === 'en' ? `Stage: ${event.stage}` : `단계: ${event.stage}`)
         }
       },
     },
@@ -84,12 +97,16 @@ async function main(): Promise<void> {
   )
 
   const segments = listSegments(db, source.id)
-  console.log('\n===== 세그먼트 =====')
+  console.log(lang === 'en' ? '\n===== Segments =====' : '\n===== 세그먼트 =====')
   for (const seg of segments) {
     console.log(`[${formatHms(seg.start_ms)}–${formatHms(seg.end_ms)}] ${seg.text}`)
   }
-  console.log(`\n총 ${segments.length}개 세그먼트`)
-  console.log(`누적 사용액: $${ledger.totalUsd.toFixed(4)} / $${budgetCapUsd()}`)
+  console.log(lang === 'en' ? `\n${segments.length} segments total` : `\n총 ${segments.length}개 세그먼트`)
+  console.log(
+    lang === 'en'
+      ? `Total spend: $${ledger.totalUsd.toFixed(4)} / $${budgetCapUsd()}`
+      : `누적 사용액: $${ledger.totalUsd.toFixed(4)} / $${budgetCapUsd()}`,
+  )
 }
 
 main().catch((err) => {

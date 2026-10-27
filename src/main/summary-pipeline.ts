@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
-import type { Summary, SummaryProgressEvent } from '../shared/types'
+import type { AppLanguage, Summary, SummaryProgressEvent } from '../shared/types'
 import {
   createSummary,
   getLatestSummary,
@@ -29,9 +29,10 @@ import {
   validateVerifyPayload,
   VERIFY_SCHEMA,
   VERIFY_SCHEMA_NAME,
-  ZERO_CITATION_REASON,
+  zeroCitationReason,
   type VerifyItem,
 } from './grounding'
+import { langMsg } from './lang'
 import type { MetaApi } from './meta-api'
 
 /**
@@ -45,6 +46,7 @@ export interface SummaryPipelineDeps {
   db: DatabaseSync
   metaApi: MetaApi
   model?: string
+  language?: AppLanguage
   onProgress?: (event: SummaryProgressEvent) => void
 }
 
@@ -58,14 +60,15 @@ export async function runSummaryPipeline(
 ): Promise<Summary> {
   const { db, metaApi, onProgress } = deps
   const model = deps.model ?? DEFAULT_SUMMARY_MODEL
+  const language: AppLanguage = deps.language ?? 'ko'
 
   const segments = listNoteSegments(db, noteId)
   const pages = listNotePages(db, noteId)
   if (segments.length === 0 && pages.length === 0) {
-    throw new Error('요약할 자료가 없습니다')
+    throw new Error(langMsg(language, '요약할 자료가 없습니다', 'No evidence to summarize'))
   }
 
-  const summary = createSummary(db, noteId, model)
+  const summary = createSummary(db, noteId, model, 'auto', language)
   const report = (stage: SummaryProgressEvent['stage'], message?: string): void => {
     onProgress?.({ noteId, summaryId: summary.id, stage, message })
   }
@@ -79,7 +82,7 @@ export async function runSummaryPipeline(
     const pageByNumber = pageIdByNumberMap(numberedPages)
     const summaryRaw = await metaApi.chat({
       model,
-      messages: buildSummaryMessages(numbered, numberedPages),
+      messages: buildSummaryMessages(numbered, numberedPages, language),
       responseFormat: { name: SUMMARY_SCHEMA_NAME, schema: SUMMARY_SCHEMA },
     })
     const mapped = mapSummaryClaims(validateSummaryPayload(summaryRaw), byNumber, pageByNumber)
@@ -93,7 +96,7 @@ export async function runSummaryPipeline(
           ? 'unsupported'
           : ('pending' as const),
       reason:
-        c.segmentDbIds.length === 0 && c.pageDbIds.length === 0 ? ZERO_CITATION_REASON : null,
+        c.segmentDbIds.length === 0 && c.pageDbIds.length === 0 ? zeroCitationReason(language) : null,
       segmentIds: c.segmentDbIds,
       pageIds: c.pageDbIds,
     }))
@@ -122,12 +125,13 @@ export async function runSummaryPipeline(
       }))
       const verifyRaw = await metaApi.chat({
         model,
-        messages: buildVerifyMessages(items),
+        messages: buildVerifyMessages(items, language),
         responseFormat: { name: VERIFY_SCHEMA_NAME, schema: VERIFY_SCHEMA },
       })
       const resolved = applyVerifyResults(
         items.map((item) => item.claimIdx),
         validateVerifyPayload(verifyRaw),
+        language,
       )
       for (const r of resolved) {
         const claimId = claimIdByIdx.get(r.claimIdx)

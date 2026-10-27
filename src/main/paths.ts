@@ -30,3 +30,7 @@ export function ledgerFilePath(dataDir: string = getDataDir()): string {
 export function mediaDirPath(dataDir: string = getDataDir()): string {
   return path.join(dataDir, 'media')
 }
+
+export function settingsFilePath(dataDir: string = getDataDir()): string {
+  return path.join(dataDir, 'settings.json')
+}

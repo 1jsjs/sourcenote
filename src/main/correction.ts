@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
-import type { Correction, CorrectionProgressEvent } from '../shared/types'
+import type { AppLanguage, Correction, CorrectionProgressEvent } from '../shared/types'
 import {
   deletePendingCorrections,
   getCorrection,
@@ -11,6 +11,7 @@ import {
   type NewCorrection,
 } from './db'
 import { DEFAULT_SUMMARY_MODEL, formatSegmentLine } from './grounding'
+import { langMsg } from './lang'
 import type { ChatMessage, MetaApi } from './meta-api'
 
 /**
@@ -41,6 +42,38 @@ export const CORRECTION_SYSTEM_PROMPT =
   '(just the wrong words); one item per occurrence. ' +
   'Write the reason in Korean. ' +
   'Reply in Korean.'
+
+/**
+ * Correction system prompt in the requested language. The Korean rule
+ * (Hangul phonetic spellings of English terms -> English) is kept, phrased
+ * generically so the same prompt also works for English lectures: misheard
+ * technical terms are fixed against the slide spelling, plus accidental
+ * repeats and obvious typos.
+ */
+export function correctionSystemPrompt(language: AppLanguage): string {
+  if (language === 'en') {
+    return (
+      'You are a transcription proofreader for lecture transcripts. ' +
+      'Fix ONLY speech-recognition errors:\n' +
+      '(1) term: misheard technical terms -> the correct spelling, ' +
+      'preferring the exact spelling used on the slides when present ' +
+      '(e.g. Korean phonetic spellings like 러닝 레이트 -> learning rate, ' +
+      'or misheard words like "gradient decent" -> "gradient descent"). ' +
+      'Keep normal words as they are; ' +
+      'only convert technical terms that the slides spell differently or that are clearly jargon.\n' +
+      'If a longer phrase contains a shorter one, propose only the longer phrase for that occurrence.\n' +
+      'Never delete a whole segment; for duplicates remove only the repeated words.\n' +
+      '(2) duplicate: accidental repeated words.\n' +
+      '(3) typo: obvious misrecognitions with a clear intended word.\n' +
+      'Never paraphrase, never add or remove meaning, never change numbers. ' +
+      '`before` must be copied exactly from the segment text and be as short as possible ' +
+      '(just the wrong words); one item per occurrence. ' +
+      'Write the reason in English. ' +
+      'Reply in English.'
+    )
+  }
+  return CORRECTION_SYSTEM_PROMPT
+}
 
 export const CORRECTION_SCHEMA_NAME = 'transcript_corrections'
 
@@ -111,6 +144,7 @@ export interface ValidCorrection extends NewCorrection {
 export function buildCorrectionMessages(
   numberedLines: string[],
   slideTexts: string[] = [],
+  language: AppLanguage = 'ko',
 ): ChatMessage[] {
   const parts = [...numberedLines]
   if (slideTexts.length > 0) {
@@ -124,7 +158,7 @@ export function buildCorrectionMessages(
     parts.push('Slides:')
     parts.push(kept.join('\n'))
   }
-  return [{ role: 'system', content: CORRECTION_SYSTEM_PROMPT }, { role: 'user', content: parts.join('\n') }]
+  return [{ role: 'system', content: correctionSystemPrompt(language) }, { role: 'user', content: parts.join('\n') }]
 }
 
 /**
@@ -182,6 +216,7 @@ export interface CorrectionPipelineDeps {
   db: DatabaseSync
   metaApi: MetaApi
   model?: string
+  language?: AppLanguage
   onProgress?: (event: CorrectionProgressEvent) => void
 }
 
@@ -195,13 +230,14 @@ export async function runCorrectionPipeline(
 ): Promise<Correction[]> {
   const { db, metaApi, onProgress } = deps
   const model = deps.model ?? DEFAULT_SUMMARY_MODEL
+  const language: AppLanguage = deps.language ?? 'ko'
   const report = (stage: CorrectionProgressEvent['stage'], message?: string): void => {
     onProgress?.({ noteId, stage, message })
   }
 
   const segments = listNoteSegments(db, noteId)
   if (segments.length === 0) {
-    throw new Error('교정할 전사 구간이 없습니다')
+    throw new Error(langMsg(language, '교정할 전사 구간이 없습니다', 'No transcript segments to correct'))
   }
   const pages = listNotePages(db, noteId)
 
@@ -214,6 +250,7 @@ export async function runCorrectionPipeline(
       messages: buildCorrectionMessages(
         lines,
         pages.map((p) => p.text),
+        language,
       ),
       responseFormat: { name: CORRECTION_SCHEMA_NAME, schema: CORRECTION_SCHEMA },
     })
@@ -278,6 +315,7 @@ export function listCorrectionsDto(db: DatabaseSync, noteId: number): Correction
 export function acceptCorrection(
   db: DatabaseSync,
   correctionId: number,
+  language: AppLanguage = 'ko',
 ): { message: string | null } {
   const correction = getCorrection(db, correctionId)
   if (!correction) throw new Error('교정 제안을 찾을 수 없습니다.')
@@ -292,7 +330,13 @@ export function acceptCorrection(
     if (!seg.text.includes(correction.before_text)) {
       db.prepare('UPDATE corrections SET status = ? WHERE id = ?').run('rejected', correctionId)
       db.exec('COMMIT')
-      return { message: '원문이 이미 바뀌어 적용할 수 없습니다.' }
+      return {
+        message: langMsg(
+          language,
+          '원문이 이미 바뀌어 적용할 수 없습니다.',
+          'The original text already changed, so this fix no longer applies.',
+        ),
+      }
     }
     const next = applyCorrectionText(seg.text, correction.before_text, correction.after_text)
     if (seg.originalText === null) {

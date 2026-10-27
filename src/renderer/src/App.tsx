@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
+  AppLanguage,
   Claim,
   Correction,
   CorrectionProgressEvent,
   Note,
   NotePage,
   ProgressEvent,
+  SampleInfo,
   Segment,
   Source,
   SourceStatus,
@@ -14,18 +16,15 @@ import type {
 } from '../../shared/types'
 import AudioPlayer from './AudioPlayer'
 import SlidePanel from './SlidePanel'
-
-const CORRECTION_KIND_LABEL: Record<Correction['kind'], string> = {
-  term: '용어',
-  duplicate: '중복',
-  typo: '오타',
-}
+import { sampleLanguageLabel, t, type MessageKey } from './i18n'
 
 function ClaimList({
+  lang,
   claims,
   onCiteSegment,
   onCitePage,
 }: {
+  lang: AppLanguage
   claims: Claim[]
   onCiteSegment: (sourceId: number, segmentId: number, startMs: number) => void
   onCitePage: (sourceId: number, pageNo: number, displayName: string) => void
@@ -38,7 +37,9 @@ function ClaimList({
           className={claim.verdict === 'unsupported' ? 'claim claim-unsupported' : 'claim'}
         >
           <span className="claim-text">{claim.text}</span>{' '}
-          {claim.verdict === 'unsupported' && <span className="badge-unsupported">자료에 없음</span>}{' '}
+          {claim.verdict === 'unsupported' && (
+            <span className="badge-unsupported">{t(lang, 'notInSources')}</span>
+          )}{' '}
           {claim.citations.map((cite) => (
             <button
               key={cite.segmentId}
@@ -68,12 +69,12 @@ function ClaimList({
   )
 }
 
-const STATUS_LABEL: Record<SourceStatus, string> = {
-  pending: '대기',
-  converting: '변환 중',
-  transcribing: '전사 중',
-  done: '완료',
-  error: '오류',
+const STATUS_KEY: Record<SourceStatus, MessageKey> = {
+  pending: 'statusPending',
+  converting: 'statusConverting',
+  transcribing: 'statusTranscribing',
+  done: 'statusDone',
+  error: 'statusError',
 }
 
 function formatHms(ms: number): string {
@@ -86,6 +87,7 @@ function formatHms(ms: number): string {
 }
 
 export default function App() {
+  const [lang, setLang] = useState<AppLanguage>('ko')
   const [notes, setNotes] = useState<Note[]>([])
   const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null)
   const [sources, setSources] = useState<Source[]>([])
@@ -109,6 +111,9 @@ export default function App() {
   const [playerStartMs, setPlayerStartMs] = useState(0)
   const [playToken, setPlayToken] = useState(0)
   const [activeSegmentId, setActiveSegmentId] = useState<number | null>(null)
+  const [samples, setSamples] = useState<SampleInfo[]>([])
+  const [showSamples, setShowSamples] = useState(false)
+  const [importingSample, setImportingSample] = useState(false)
   const [slideSel, setSlideSel] = useState<{
     sourceId: number
     pageNo: number
@@ -122,6 +127,10 @@ export default function App() {
 
   const refreshNotes = useCallback(async () => {
     setNotes(await window.sourcenote.listNotes())
+  }, [])
+
+  const refreshSamples = useCallback(async () => {
+    setSamples(await window.sourcenote.listSamples())
   }, [])
 
   const refreshSources = useCallback(
@@ -139,9 +148,38 @@ export default function App() {
   )
 
   useEffect(() => {
+    void window.sourcenote.getSettings().then((s) => setLang(s.language))
     void refreshNotes()
     void refreshSpend()
-  }, [refreshNotes, refreshSpend])
+    void refreshSamples()
+  }, [refreshNotes, refreshSpend, refreshSamples])
+
+  const handleSwitchLanguage = async (next: AppLanguage): Promise<void> => {
+    if (next === lang) return
+    setLang(next)
+    try {
+      const saved = await window.sourcenote.setSettings({ language: next })
+      setLang(saved.language)
+    } catch (err) {
+      setLang(lang)
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const handleImportSample = async (name: string): Promise<void> => {
+    setError(null)
+    setImportingSample(true)
+    try {
+      const note = await window.sourcenote.importSample(name)
+      await refreshNotes()
+      setSelectedNoteId(note.id)
+      setShowSamples(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setImportingSample(false)
+    }
+  }
 
   const refreshSummary = useCallback(async (noteId: number) => {
     setSummary(await window.sourcenote.getLatestSummary(noteId))
@@ -397,21 +435,53 @@ export default function App() {
     pageCountBySource.set(p.sourceId, (pageCountBySource.get(p.sourceId) ?? 0) + 1)
   }
   const shownSegmentId = highlightedSegmentId ?? activeSegmentId
+  const correctionKindLabel: Record<Correction['kind'], string> = {
+    term: t(lang, 'kindTerm'),
+    duplicate: t(lang, 'kindDuplicate'),
+    typo: t(lang, 'kindTypo'),
+  }
+
+  const sampleList = (
+    <ul className="sample-list">
+      {samples.map((sample) => (
+        <li key={sample.name}>
+          <button disabled={importingSample} onClick={() => void handleImportSample(sample.name)}>
+            {sample.title} ({sampleLanguageLabel(lang, sample.language)})
+          </button>
+        </li>
+      ))}
+      {samples.length === 0 && <li className="empty">{t(lang, 'noSamples')}</li>}
+    </ul>
+  )
 
   return (
     <div className="app">
       <header className="header">
-        <h1>Sourcenote</h1>
+        <h1>{t(lang, 'appTitle')}</h1>
         <span className="spend">
           ${spend.spentUsd.toFixed(4)} / ${spend.capUsd}
         </span>
+        <div className="lang-toggle" role="group" aria-label="Language / 언어">
+          <button
+            className={lang === 'ko' ? 'lang-option selected' : 'lang-option'}
+            onClick={() => void handleSwitchLanguage('ko')}
+          >
+            한국어
+          </button>
+          <button
+            className={lang === 'en' ? 'lang-option selected' : 'lang-option'}
+            onClick={() => void handleSwitchLanguage('en')}
+          >
+            English
+          </button>
+        </div>
       </header>
 
       {error !== null && (
         <div className="error-banner" role="alert">
           {error}
           <button className="error-close" onClick={() => setError(null)}>
-            닫기
+            {t(lang, 'close')}
           </button>
         </div>
       )}
@@ -421,13 +491,13 @@ export default function App() {
           <div className="new-note">
             <input
               value={newTitle}
-              placeholder="노트 제목"
+              placeholder={t(lang, 'noteTitlePlaceholder')}
               onChange={(e) => setNewTitle(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') void handleCreateNote()
               }}
             />
-            <button onClick={() => void handleCreateNote()}>새 노트</button>
+            <button onClick={() => void handleCreateNote()}>{t(lang, 'newNote')}</button>
           </div>
           <ul className="note-list">
             {notes.map((note) => (
@@ -440,23 +510,36 @@ export default function App() {
                 </button>
               </li>
             ))}
-            {notes.length === 0 && <li className="empty">노트가 없습니다</li>}
+            {notes.length === 0 && <li className="empty">{t(lang, 'noNotes')}</li>}
           </ul>
+          <div className="samples">
+            <button onClick={() => setShowSamples((v) => !v)}>{t(lang, 'openSample')}</button>
+            {showSamples && sampleList}
+          </div>
         </aside>
 
         <main className="content">
           {selectedNoteId === null ? (
-            <p className="empty">왼쪽에서 노트를 선택하거나 새로 만드세요.</p>
+            notes.length === 0 ? (
+              <div className="empty-state">
+                <p>{t(lang, 'emptyTitle')}</p>
+                <p className="empty-hint">{t(lang, 'emptyHint')}</p>
+                {importingSample && <p className="empty-hint">{t(lang, 'importing')}</p>}
+                {sampleList}
+              </div>
+            ) : (
+              <p className="empty">{t(lang, 'selectNote')}</p>
+            )
           ) : (
             <>
               <div className="content-actions">
-                <button onClick={() => void handleAddAudio()}>오디오 파일 추가</button>
-                <button onClick={() => void handleAddPdf()}>PDF 추가</button>
+                <button onClick={() => void handleAddAudio()}>{t(lang, 'addAudio')}</button>
+                <button onClick={() => void handleAddPdf()}>{t(lang, 'addPdf')}</button>
                 <button
                   onClick={() => void handleRunSummary()}
                   disabled={summaryRunning || !sources.some((s) => s.status === 'done')}
                 >
-                  근거 요약 만들기
+                  {t(lang, 'makeSummary')}
                 </button>
                 <button
                   onClick={() => void handleRunCorrections()}
@@ -464,29 +547,32 @@ export default function App() {
                     correctionsRunning ||
                     !sources.some((s) => s.kind === 'audio' && s.status === 'done')
                   }
-                  title="전사 오류(용어·중복·오타) 수정 제안"
+                  title={t(lang, 'suggestCorrectionsTitle')}
                 >
-                  용어 교정 제안
+                  {t(lang, 'suggestCorrections')}
                 </button>
                 {summaryRunning && (
                   <span className="summary-progress">
-                    {summaryStage === 'verifying' ? '검증 중…' : '요약 중…'}
+                    {summaryStage === 'verifying' ? t(lang, 'verifying') : t(lang, 'summarizing')}
                   </span>
                 )}
                 {correctionsRunning && (
                   <span className="summary-progress">
-                    {correctionStage === 'done' ? '완료' : '교정 제안 생성 중…'}
+                    {correctionStage === 'done' ? t(lang, 'doneLabel') : t(lang, 'generatingCorrections')}
                   </span>
                 )}
               </div>
               {summary !== null && summary.claims.length > 0 && (
                 <section className="summary">
+                  <h3 className="section-title">{t(lang, 'citedSummary')}</h3>
                   <div className="summary-counts">
-                    검증됨{' '}
-                    {summary.claims.filter((c) => c.verdict === 'supported').length} · 자료에
-                    없음 {summary.claims.filter((c) => c.verdict === 'unsupported').length}
+                    {t(lang, 'verifiedCount')}{' '}
+                    {summary.claims.filter((c) => c.verdict === 'supported').length} ·{' '}
+                    {t(lang, 'notInSources')}{' '}
+                    {summary.claims.filter((c) => c.verdict === 'unsupported').length}
                   </div>
                   <ClaimList
+                    lang={lang}
                     claims={summary.claims}
                     onCiteSegment={handleCiteClick}
                     onCitePage={(sourceId, pageNo, displayName) =>
@@ -498,15 +584,18 @@ export default function App() {
               {corrections.length > 0 && (
                 <section className="summary corrections">
                   <div className="summary-counts">
-                    교정 제안 {corrections.filter((c) => c.status === 'pending').length} · 수락됨{' '}
-                    {corrections.filter((c) => c.status === 'accepted').length} · 거절됨{' '}
+                    {t(lang, 'suggestedFixes')}{' '}
+                    {corrections.filter((c) => c.status === 'pending').length} ·{' '}
+                    {t(lang, 'acceptedCount')}{' '}
+                    {corrections.filter((c) => c.status === 'accepted').length} ·{' '}
+                    {t(lang, 'rejectedCount')}{' '}
                     {corrections.filter((c) => c.status === 'rejected').length}{' '}
                     {corrections.some((c) => c.status === 'pending') && (
                       <button
                         className="accept-all"
                         onClick={() => void handleAcceptAllCorrections()}
                       >
-                        모두 수락
+                        {t(lang, 'acceptAll')}
                       </button>
                     )}
                   </div>
@@ -517,7 +606,7 @@ export default function App() {
                         <li key={c.id} className="claim">
                           <button
                             className="cite-chip"
-                            title="이 위치부터 재생"
+                            title={t(lang, 'playFromHere')}
                             onClick={() => {
                               const sourceId = sourceIdOfSegment(c.segmentId)
                               if (sourceId !== null) {
@@ -532,22 +621,26 @@ export default function App() {
                           {' → '}
                           <span className="correction-after">{c.afterText}</span>{' '}
                           <span className="correction-kind">
-                            {CORRECTION_KIND_LABEL[c.kind]}
+                            {correctionKindLabel[c.kind]}
                           </span>{' '}
                           <span className="correction-reason">{c.reason}</span>{' '}
-                          <button onClick={() => void handleAcceptCorrection(c.id)}>수락</button>{' '}
-                          <button onClick={() => void handleRejectCorrection(c.id)}>거절</button>
+                          <button onClick={() => void handleAcceptCorrection(c.id)}>
+                            {t(lang, 'accept')}
+                          </button>{' '}
+                          <button onClick={() => void handleRejectCorrection(c.id)}>
+                            {t(lang, 'reject')}
+                          </button>
                         </li>
                       ))}
                   </ul>
                 </section>
               )}
               <section className="summary check-notes">
-                <h3 className="section-title">내 필기 검증</h3>
+                <h3 className="section-title">{t(lang, 'checkNotesTitle')}</h3>
                 <textarea
                   className="check-input"
                   value={checkText}
-                  placeholder="강의를 듣고 적은 내용을 붙여 넣으세요. 문장마다 강의 근거를 찾아 맞는지 확인합니다."
+                  placeholder={t(lang, 'checkPlaceholder')}
                   onChange={(e) => setCheckText(e.target.value)}
                   rows={4}
                 />
@@ -556,18 +649,19 @@ export default function App() {
                     onClick={() => void handleRunCheck()}
                     disabled={checkRunning || checkText.trim().length === 0}
                   >
-                    {checkRunning ? '검증 중…' : '검증하기'}
+                    {checkRunning ? t(lang, 'checking') : t(lang, 'checkButton')}
                   </button>
                 </div>
                 {checkResult !== null && checkResult.claims.length > 0 && (
                   <>
                     <div className="summary-counts">
-                      검증됨{' '}
-                      {checkResult.claims.filter((c) => c.verdict === 'supported').length} ·
-                      자료에 없음{' '}
+                      {t(lang, 'verifiedCount')}{' '}
+                      {checkResult.claims.filter((c) => c.verdict === 'supported').length} ·{' '}
+                      {t(lang, 'notInSources')}{' '}
                       {checkResult.claims.filter((c) => c.verdict === 'unsupported').length}
                     </div>
                     <ClaimList
+                      lang={lang}
                       claims={checkResult.claims}
                       onCiteSegment={handleCiteClick}
                       onCitePage={(sourceId, pageNo, displayName) =>
@@ -577,7 +671,7 @@ export default function App() {
                   </>
                 )}
               </section>
-              {sources.length === 0 && <p className="empty">추가된 자료가 없습니다.</p>}
+              {sources.length === 0 && <p className="empty">{t(lang, 'noSources')}</p>}
               {sources.map((source) => {
                 const progress = progressBySource[source.id]
                 const segments = segmentsBySource[source.id] ?? []
@@ -587,17 +681,23 @@ export default function App() {
                     <header className="source-header">
                       <span className="source-name">{source.display_name}</span>
                       <span className={`status status-${source.status}`}>
-                        {STATUS_LABEL[source.status]}
                         {source.status === 'transcribing' && progress && progress.totalChunks > 0
-                          ? ` (${progress.chunk}/${progress.totalChunks} 청크)`
-                          : ''}
+                          ? t(lang, 'transcribingProgress', {
+                              done: progress.chunk,
+                              total: progress.totalChunks,
+                            })
+                          : t(lang, STATUS_KEY[source.status])}
                       </span>
                     </header>
                     {source.duration_ms !== null && (
-                      <div className="source-meta">길이 {formatHms(source.duration_ms)}</div>
+                      <div className="source-meta">
+                        {t(lang, 'lengthLabel', { hms: formatHms(source.duration_ms) })}
+                      </div>
                     )}
                     {source.kind === 'pdf' && source.status === 'done' && (
-                      <div className="source-meta">슬라이드 {pageCount}페이지</div>
+                      <div className="source-meta">
+                        {t(lang, 'slidesLabel', { count: pageCount })}
+                      </div>
                     )}
                     {source.status === 'error' && source.error !== null && (
                       <div className="source-error">{source.error}</div>
@@ -613,7 +713,7 @@ export default function App() {
                           >
                             <button
                               className="seg-time"
-                              title="이 위치부터 재생"
+                              title={t(lang, 'playFromHere')}
                               onClick={() =>
                                 handleTimestampClick(source.id, seg.id, seg.start_ms)
                               }
@@ -621,8 +721,13 @@ export default function App() {
                               [{formatHms(seg.start_ms)}–{formatHms(seg.end_ms)}]
                             </button>{' '}
                             {seg.original_text !== null && (
-                              <span className="corrected-mark" title={`원문: ${seg.original_text}`}>
-                                교정됨
+                              <span
+                                className="corrected-mark"
+                                title={t(lang, 'correctedTitle', {
+                                  text: seg.original_text,
+                                })}
+                              >
+                                {t(lang, 'correctedMark')}
                               </span>
                             )}{' '}
                             {seg.text}
@@ -635,6 +740,7 @@ export default function App() {
               })}
               {playerSource !== null && (
                 <AudioPlayer
+                  lang={lang}
                   sourceId={playerSource.id}
                   sourceName={playerSource.display_name}
                   startMs={playerStartMs}
@@ -647,6 +753,7 @@ export default function App() {
         </main>
         {slideSel !== null && (
           <SlidePanel
+            lang={lang}
             sourceId={slideSel.sourceId}
             pageNo={slideSel.pageNo}
             displayName={slideSel.displayName}

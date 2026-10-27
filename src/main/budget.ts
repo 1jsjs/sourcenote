@@ -1,5 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import type { AppLanguage } from '../shared/types'
+import { langMsg } from './lang'
 
 // ---------------------------------------------------------------------------
 // Pricing (USD). Keep in sync with Meta API pricing.
@@ -85,10 +87,15 @@ export class BudgetExceededError extends Error {
   readonly attemptedUsd: number
   readonly capUsd: number
 
-  constructor(totalUsd: number, attemptedUsd: number, capUsd: number) {
+  constructor(totalUsd: number, attemptedUsd: number, capUsd: number, language: AppLanguage = 'ko') {
     super(
-      `예산 한도($${capUsd})에 도달해 호출을 막았습니다 ` +
-        `(현재 사용 $${totalUsd.toFixed(4)}, 예상 $${attemptedUsd.toFixed(4)})`,
+      langMsg(
+        language,
+        `예산 한도($${capUsd})에 도달해 호출을 막았습니다 ` +
+          `(현재 사용 $${totalUsd.toFixed(4)}, 예상 $${attemptedUsd.toFixed(4)})`,
+        `Budget cap ($${capUsd}) reached, blocking the call ` +
+          `(used $${totalUsd.toFixed(4)}, estimated $${attemptedUsd.toFixed(4)})`,
+      ),
     )
     this.name = 'BudgetExceededError'
     this.totalUsd = totalUsd
@@ -102,9 +109,10 @@ export function assertCanSpend(
   totalUsd: number,
   estimatedUsd: number,
   capUsd: number = budgetCapUsd(),
+  language: AppLanguage = 'ko',
 ): void {
   if (totalUsd >= capUsd || totalUsd + estimatedUsd > capUsd) {
-    throw new BudgetExceededError(totalUsd, estimatedUsd, capUsd)
+    throw new BudgetExceededError(totalUsd, estimatedUsd, capUsd, language)
   }
 }
 
@@ -171,8 +179,8 @@ export class LedgerStore {
     return this.load().totalUsd
   }
 
-  assertCanSpend(estimatedUsd: number): void {
-    assertCanSpend(this.totalUsd, estimatedUsd)
+  assertCanSpend(estimatedUsd: number, language: AppLanguage = 'ko'): void {
+    assertCanSpend(this.totalUsd, estimatedUsd, budgetCapUsd(), language)
   }
 
   record(entry: Omit<LedgerEntry, 'ts'>): LedgerEntry {

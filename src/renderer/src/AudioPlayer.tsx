@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import type { AppLanguage } from '../../shared/types'
+import { t } from './i18n'
 
 /** Formats milliseconds as hh:mm:ss (shared with the note view). */
 export function formatHms(ms: number): string {
@@ -11,6 +13,7 @@ export function formatHms(ms: number): string {
 }
 
 interface AudioPlayerProps {
+  lang: AppLanguage
   sourceId: number
   sourceName: string
   /** Seek target in ms for the latest play request. */
@@ -25,6 +28,7 @@ interface AudioPlayerProps {
  * over `sourcenote-media://source/<id>` (with HTTP Range, so seeking works).
  */
 export default function AudioPlayer({
+  lang,
   sourceId,
   sourceName,
   startMs,
@@ -72,8 +76,8 @@ export default function AudioPlayer({
 
   const maxSec = durationMs / 1000
   return (
-    <div className="player" role="region" aria-label="오디오 재생">
-      <button onClick={toggle}>{playing ? '일시정지' : '재생'}</button>
+    <div className="player" role="region" aria-label={t(lang, 'playerRegion')}>
+      <button onClick={toggle}>{playing ? t(lang, 'pause') : t(lang, 'play')}</button>
       <span className="player-name" title={sourceName}>
         {sourceName}
       </span>
@@ -88,7 +92,7 @@ export default function AudioPlayer({
         step={0.1}
         value={maxSec > 0 ? Math.min(currentMs / 1000, maxSec) : 0}
         onChange={(e) => seek(Number(e.target.value))}
-        aria-label="재생 위치"
+        aria-label={t(lang, 'seekLabel')}
       />
       <audio
         ref={audioRef}

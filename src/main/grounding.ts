@@ -1,4 +1,6 @@
+import type { AppLanguage } from '../shared/types'
 import type { ChatMessage } from './meta-api'
+import { langMsg } from './lang'
 
 /**
  * Prompt building and other pure logic for the citation-enforced summary.
@@ -12,11 +14,21 @@ export const DEFAULT_SUMMARY_MODEL = 'muse-spark-1.3'
 /** Maximum claims checked in a single verification call. */
 export const VERIFY_BATCH_SIZE = 20
 
-/** Reason stored when a claim cites no valid segment. */
+/** Reason stored when a claim cites no valid segment (Korean; use the getter for other languages). */
 export const ZERO_CITATION_REASON = '인용한 구간이 자료에 없습니다'
 
-/** Reason stored when the model omits a claim from verification results. */
+/** Reason stored when the model omits a claim from verification results (Korean; use the getter). */
 export const MISSING_RESULT_REASON = '검증 결과를 받지 못했습니다'
+
+/** Fixed reason stored when a claim cites no valid segment, in the summary language. */
+export function zeroCitationReason(language: AppLanguage): string {
+  return langMsg(language, ZERO_CITATION_REASON, 'The cited evidence is not in the sources')
+}
+
+/** Fixed reason stored when the model omits a claim from verification results. */
+export function missingResultReason(language: AppLanguage): string {
+  return langMsg(language, MISSING_RESULT_REASON, 'No verification result was returned')
+}
 
 /** Minimal segment shape needed for numbering (NoteSegment satisfies this). */
 export interface NumberedInput {
@@ -145,6 +157,26 @@ export const SUMMARY_SYSTEM_PROMPT =
   'Do not write segment or slide numbers like [3] or [P2] inside the claim text.\n' +
   'Reply in Korean.'
 
+/** Summary system prompt in the requested output language. */
+export function summarySystemPrompt(language: AppLanguage): string {
+  if (language === 'en') {
+    return (
+      'You are a lecture-note assistant. Summarize the lecture below in English.\n' +
+      'Write 5–15 concise claims that cover the main points in lecture order.\n' +
+      'Write the claims in English.\n' +
+      'Every claim MUST cite 1–5 transcript segments ([n]) and/or slide pages ([Pk]) ' +
+      'that directly support it.\n' +
+      'Prefer the transcript for what the lecturer said; use slides for terms, ' +
+      'definitions, and figures shown on slides.\n' +
+      'Use only information stated in the transcript or slides. Do not use outside knowledge.\n' +
+      'Do not merge unrelated points into a single claim.\n' +
+      'Do not write segment or slide numbers like [3] or [P2] inside the claim text.\n' +
+      'Reply in English.'
+    )
+  }
+  return SUMMARY_SYSTEM_PROMPT
+}
+
 export const SUMMARY_SCHEMA_NAME = 'lecture_summary'
 
 export const SUMMARY_SCHEMA = {
@@ -175,6 +207,7 @@ export const SUMMARY_SCHEMA = {
 export function buildSummaryMessages(
   numbered: NumberedSegment[],
   numberedPages: NumberedPage[] = [],
+  language: AppLanguage = 'ko',
 ): ChatMessage[] {
   const parts = numbered.map((s) => s.line)
   if (numberedPages.length > 0) {
@@ -182,7 +215,7 @@ export function buildSummaryMessages(
     for (const p of numberedPages) parts.push(p.line)
   }
   return [
-    { role: 'system', content: SUMMARY_SYSTEM_PROMPT },
+    { role: 'system', content: summarySystemPrompt(language) },
     { role: 'user', content: parts.join('\n') },
   ]
 }
@@ -289,6 +322,21 @@ export const VERIFY_SYSTEM_PROMPT =
   'Treat these as the same term, not as a mismatch.\n' +
   'Reason in Korean, one sentence per claim.'
 
+/** Verification system prompt in the requested output language. */
+export function verifySystemPrompt(language: AppLanguage): string {
+  if (language === 'en') {
+    return (
+      'You are a strict fact checker. For each claim, decide if it is fully supported by ONLY its cited evidence (transcript segments and/or slide pages).\n' +
+      'Be strict: any added fact, number, causal link, or generalization not stated in the cited evidence means supported=false.\n' +
+      'Transcripts are speech-recognition output: technical terms may be misheard ' +
+      '(e.g. Korean phonetic spellings of English terms like 히든 레이어 = hidden layer). ' +
+      'Treat these as the same term, not as a mismatch.\n' +
+      'Reason in English, one sentence per claim.'
+    )
+  }
+  return VERIFY_SYSTEM_PROMPT
+}
+
 export const VERIFY_SCHEMA_NAME = 'claim_verification'
 
 export const VERIFY_SCHEMA = {
@@ -333,7 +381,7 @@ export interface VerifyItem {
 }
 
 /** Builds the verification chat messages for one batch of claims. */
-export function buildVerifyMessages(batch: VerifyItem[]): ChatMessage[] {
+export function buildVerifyMessages(batch: VerifyItem[], language: AppLanguage = 'ko'): ChatMessage[] {
   const lines: string[] = []
   for (const item of batch) {
     lines.push(`Claim ${item.claimIdx}: ${item.text}`)
@@ -344,7 +392,7 @@ export function buildVerifyMessages(batch: VerifyItem[]): ChatMessage[] {
     lines.push('')
   }
   return [
-    { role: 'system', content: VERIFY_SYSTEM_PROMPT },
+    { role: 'system', content: verifySystemPrompt(language) },
     { role: 'user', content: lines.join('\n').trimEnd() },
   ]
 }
@@ -396,6 +444,7 @@ export interface ResolvedVerdict {
 export function applyVerifyResults(
   claimIdxs: number[],
   results: VerifyResultRaw[],
+  language: AppLanguage = 'ko',
 ): ResolvedVerdict[] {
   const byIndex = new Map<number, VerifyResultRaw>()
   for (const r of results) {
@@ -404,7 +453,7 @@ export function applyVerifyResults(
   return claimIdxs.map((claimIdx) => {
     const found = byIndex.get(claimIdx)
     if (!found) {
-      return { claimIdx, supported: false, reason: MISSING_RESULT_REASON }
+      return { claimIdx, supported: false, reason: missingResultReason(language) }
     }
     return { claimIdx, supported: found.supported, reason: found.reason }
   })

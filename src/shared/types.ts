@@ -3,6 +3,13 @@
  * anything from main/preload/renderer so it stays usable everywhere.
  */
 
+/** App-wide language: UI strings and AI output language together. */
+export type AppLanguage = 'ko' | 'en'
+
+export function isAppLanguage(value: unknown): value is AppLanguage {
+  return value === 'ko' || value === 'en'
+}
+
 export interface Note {
   id: number
   title: string
@@ -122,6 +129,8 @@ export interface Summary {
   createdAt: string
   /** 'auto' = generated summary, 'check' = user-notes check. */
   kind: 'auto' | 'check'
+  /** Language the claims/reasons were written in. Older rows read as 'ko'. */
+  language: AppLanguage
   claims: Claim[]
 }
 
@@ -161,4 +170,22 @@ export interface SourcenoteApi {
   /** Checks the user's own notes sentences against the lecture evidence. */
   runCheck(noteId: number, text: string): Promise<Summary>
   getLatestCheck(noteId: number): Promise<Summary | null>
+  getSettings(): Promise<AppSettings>
+  setSettings(patch: Partial<AppSettings>): Promise<AppSettings>
+  /** Folders under the bundled samples dir that contain a valid note.json. */
+  listSamples(): Promise<SampleInfo[]>
+  /** Imports a bundled sample as a new note (a second import makes a copy). */
+  importSample(name: string): Promise<Note>
+}
+
+/** Persisted app settings (settings.json in the data dir). */
+export interface AppSettings {
+  language: AppLanguage
+}
+
+/** One bundled sample note available for offline import. */
+export interface SampleInfo {
+  name: string
+  title: string
+  language: AppLanguage
 }

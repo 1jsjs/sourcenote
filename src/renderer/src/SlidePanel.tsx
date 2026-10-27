@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist/build/pdf.mjs'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import type { AppLanguage } from '../../shared/types'
+import { t } from './i18n'
 
 // pdf.js renders pages on a worker; Vite serves the bundled worker file.
 GlobalWorkerOptions.workerSrc = workerUrl
 
 interface SlidePanelProps {
+  lang: AppLanguage
   sourceId: number
   pageNo: number
   displayName: string
@@ -16,6 +19,7 @@ interface SlidePanelProps {
 
 /** Right-side panel rendering one PDF slide page on a canvas. */
 export default function SlidePanel({
+  lang,
   sourceId,
   pageNo,
   displayName,
@@ -58,7 +62,7 @@ export default function SlidePanel({
         const ctx = canvas.getContext('2d')
         if (!ctx) {
           if (!cancelled) {
-            setError('슬라이드를 그릴 수 없습니다.')
+            setError(t(lang, 'slideRenderError'))
             setLoading(false)
           }
           return
@@ -69,32 +73,32 @@ export default function SlidePanel({
       .catch((err: unknown) => {
         console.error('slide load failed', err)
         if (!cancelled) {
-          setError('슬라이드를 불러오지 못했습니다.')
+          setError(t(lang, 'slideLoadError'))
           setLoading(false)
         }
       })
     return () => {
       cancelled = true
     }
-  }, [sourceId, pageNo])
+  }, [sourceId, pageNo, lang])
 
   return (
-    <aside className="slide-panel" aria-label="슬라이드 보기">
+    <aside className="slide-panel" aria-label={t(lang, 'slideRegion')}>
       <header className="slide-header">
         <span className="slide-title">
           {displayName} p.{pageNo}/{totalPages}
         </span>
-        <button onClick={onClose}>닫기</button>
+        <button onClick={onClose}>{t(lang, 'close')}</button>
       </header>
-      {loading && <p className="empty">불러오는 중…</p>}
+      {loading && <p className="empty">{t(lang, 'slideLoading')}</p>}
       {error !== null && <p className="source-error">{error}</p>}
       <canvas ref={canvasRef} className="slide-canvas" />
       <footer className="slide-nav">
         <button disabled={pageNo <= 1} onClick={() => onNavigate(pageNo - 1)}>
-          이전
+          {t(lang, 'prev')}
         </button>
         <button disabled={pageNo >= totalPages} onClick={() => onNavigate(pageNo + 1)}>
-          다음
+          {t(lang, 'next')}
         </button>
       </footer>
     </aside>

@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import type { AppLanguage } from '../shared/types'
 import { getMetaApiKey } from './apikey'
 import {
   chatCostUsd,
@@ -9,6 +10,7 @@ import {
   transcribeCostUsd,
   type LedgerStore,
 } from './budget'
+import { langMsg } from './lang'
 import { parseTranscribeResponse, type TranscribeResult } from './transcribe'
 
 /**
@@ -36,6 +38,34 @@ export interface MetaApiDeps {
   getKey?: () => Promise<string>
   /** Injectable for tests; defaults to global fetch. */
   fetchImpl?: typeof fetch
+  /** Current app language for user-facing error text; defaults to 'ko'. */
+  getLanguage?: () => AppLanguage
+}
+
+/**
+ * Error thrown for failed Meta API calls. `status` is the HTTP status, or
+ * null for network/timeout failures. The pipeline uses `status` (not the
+ * message text) to decide retries, so this stays stable across languages.
+ */
+export class MetaApiError extends Error {
+  readonly status: number | null
+
+  constructor(message: string, status: number | null) {
+    super(message)
+    this.name = 'MetaApiError'
+    this.status = status
+  }
+}
+
+/**
+ * True for failures worth retrying once per chunk: network errors, HTTP
+ * 429 and 5xx. Other 4xx errors are not retried. Pure and unit-tested.
+ */
+export function isRetryableApiError(err: unknown): boolean {
+  if (err instanceof MetaApiError) {
+    return err.status === null || err.status === 429 || err.status >= 500
+  }
+  return false
 }
 
 export interface TranscribeChunkOptions {
@@ -75,130 +105,180 @@ function redact(text: string, key: string): string {
 export function createMetaApi(deps: MetaApiDeps): MetaApi {
   const getKey = deps.getKey ?? getMetaApiKey
   const fetchImpl = deps.fetchImpl ?? fetch
+  const lang = (): AppLanguage => deps.getLanguage?.() ?? 'ko'
+
+  // Sum of pre-call estimates for calls currently in flight. The pre-call
+  // check becomes assertCanSpend(estimate + reservedInFlight) so concurrent
+  // chunk transcriptions cannot jointly overshoot the cap.
+  let reservedInFlightUsd = 0
+
+  function reserve(estimate: number): void {
+    deps.ledger.assertCanSpend(estimate + reservedInFlightUsd, lang())
+    reservedInFlightUsd += estimate
+  }
+
+  function release(estimate: number): void {
+    reservedInFlightUsd = Math.max(0, reservedInFlightUsd - estimate)
+  }
 
   async function transcribeChunk(opts: TranscribeChunkOptions): Promise<TranscribeResult> {
+    const language = lang()
     // 1. Budget gate: conservative estimate BEFORE any network traffic.
-    deps.ledger.assertCanSpend(estimateTranscribeCostUsd(opts.chunkDurationMs))
+    const estimate = estimateTranscribeCostUsd(opts.chunkDurationMs)
+    reserve(estimate)
 
-    const key = await getKey()
-    const bytes = fs.readFileSync(opts.chunkPath)
-
-    const requestJson = JSON.stringify({
-      model: TRANSCRIBE_MODEL,
-      audioEncoding: 'WAV',
-      mode: 'ENDPOINTING',
-      languageBias: ['Korean', 'English'],
-    })
-    const form = new FormData()
-    form.append('request', new Blob([requestJson], { type: 'application/json' }))
-    form.append(
-      'audio',
-      new Blob([bytes], { type: 'audio/wav' }),
-      opts.fileName ?? path.basename(opts.chunkPath),
-    )
-
-    let res: Response
     try {
-      res = await fetchImpl(`${API_BASE}/v1/asr/transcribe`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${key}`,
-          Accept: 'application/json',
-          // Content-Type (multipart boundary) is set by fetch from FormData.
-        },
-        body: form,
-        signal: AbortSignal.timeout(TRANSCRIBE_TIMEOUT_MS),
+      const key = await getKey()
+      const bytes = fs.readFileSync(opts.chunkPath)
+
+      const requestJson = JSON.stringify({
+        model: TRANSCRIBE_MODEL,
+        audioEncoding: 'WAV',
+        mode: 'ENDPOINTING',
+        languageBias: ['Korean', 'English'],
       })
-    } catch (err) {
-      // Network/timeout failure: nothing is recorded.
-      const msg = err instanceof Error ? err.message : String(err)
-      throw new Error(`전사 API 호출 실패: ${redact(msg, key)}`)
-    }
+      const form = new FormData()
+      form.append('request', new Blob([requestJson], { type: 'application/json' }))
+      form.append(
+        'audio',
+        new Blob([bytes], { type: 'audio/wav' }),
+        opts.fileName ?? path.basename(opts.chunkPath),
+      )
 
-    if (!res.ok) {
-      // No successful transcription happened: nothing is recorded.
-      const body = await res.text().catch(() => '')
-      const snippet = redact(body.slice(0, 500), key)
-      throw new Error(`전사 API 오류 (HTTP ${res.status}): ${snippet}`)
-    }
+      let res: Response
+      try {
+        res = await fetchImpl(`${API_BASE}/v1/asr/transcribe`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${key}`,
+            Accept: 'application/json',
+            // Content-Type (multipart boundary) is set by fetch from FormData.
+          },
+          body: form,
+          signal: AbortSignal.timeout(TRANSCRIBE_TIMEOUT_MS),
+        })
+      } catch (err) {
+        // Network/timeout failure: nothing is recorded.
+        const msg = err instanceof Error ? err.message : String(err)
+        throw new MetaApiError(
+          langMsg(language, `전사 API 호출 실패: ${redact(msg, key)}`, `Transcription API call failed: ${redact(msg, key)}`),
+          null,
+        )
+      }
 
-    // 3. HTTP 200: parse, then ALWAYS record actual billed duration.
-    const parsed = parseTranscribeResponse(await res.json())
-    const billedMs = parsed.audioDurationMs ?? opts.chunkDurationMs
-    deps.ledger.record({
-      kind: 'transcribe',
-      model: TRANSCRIBE_MODEL,
-      audioMs: billedMs,
-      usd: transcribeCostUsd(billedMs),
-    })
-    return parsed
+      if (!res.ok) {
+        // No successful transcription happened: nothing is recorded.
+        const body = await res.text().catch(() => '')
+        const snippet = redact(body.slice(0, 500), key)
+        throw new MetaApiError(
+          langMsg(
+            language,
+            `전사 API 오류 (HTTP ${res.status}): ${snippet}`,
+            `Transcription API error (HTTP ${res.status}): ${snippet}`,
+          ),
+          res.status,
+        )
+      }
+
+      // 3. HTTP 200: parse, then ALWAYS record actual billed duration.
+      const parsed = parseTranscribeResponse(await res.json())
+      const billedMs = parsed.audioDurationMs ?? opts.chunkDurationMs
+      deps.ledger.record({
+        kind: 'transcribe',
+        model: TRANSCRIBE_MODEL,
+        audioMs: billedMs,
+        usd: transcribeCostUsd(billedMs),
+      })
+      return parsed
+    } finally {
+      release(estimate)
+    }
   }
 
   async function chat(opts: ChatOptions): Promise<unknown> {
+    const language = lang()
     const model = opts.model ?? CHAT_MODEL
     // 1. Budget gate: conservative estimate BEFORE any network traffic.
     const promptChars = opts.messages.reduce((sum, m) => sum + m.content.length, 0)
     const estimate = estimateChatCostUsd(model, promptChars)
-    deps.ledger.assertCanSpend(estimate)
+    reserve(estimate)
 
-    const key = await getKey()
-
-    const body: Record<string, unknown> = { model, messages: opts.messages }
-    if (opts.responseFormat) {
-      body.response_format = {
-        type: 'json_schema',
-        json_schema: { name: opts.responseFormat.name, schema: opts.responseFormat.schema, strict: true },
-      }
-    }
-
-    let res: Response
     try {
-      res = await fetchImpl(`${API_BASE}/v1/chat/completions`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${key}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
-      })
-    } catch (err) {
-      // Network/timeout failure: nothing is recorded.
-      const msg = err instanceof Error ? err.message : String(err)
-      throw new Error(`요약 API 호출 실패: ${redact(msg, key)}`)
-    }
+      const key = await getKey()
 
-    if (!res.ok) {
-      // No successful completion happened: nothing is recorded.
-      const text = await res.text().catch(() => '')
-      const snippet = redact(text.slice(0, 500), key)
-      throw new Error(`요약 API 오류 (HTTP ${res.status}): ${snippet}`)
-    }
-
-    // 3. HTTP 200: parse the reply, then record actual token usage.
-    const parsed = (await res.json()) as {
-      choices?: Array<{ message?: { content?: unknown } }>
-      usage?: {
-        prompt_tokens?: unknown
-        completion_tokens?: unknown
-        completion_tokens_details?: { reasoning_tokens?: unknown }
+      const body: Record<string, unknown> = { model, messages: opts.messages }
+      if (opts.responseFormat) {
+        body.response_format = {
+          type: 'json_schema',
+          json_schema: { name: opts.responseFormat.name, schema: opts.responseFormat.schema, strict: true },
+        }
       }
-    }
-    const content = parsed.choices?.[0]?.message?.content
-    if (typeof content !== 'string') {
-      throw new Error('요약 API 응답에 내용이 없습니다.')
-    }
 
-    recordChatUsage(deps.ledger, model, parsed.usage, estimate)
-
-    if (opts.responseFormat) {
+      let res: Response
       try {
-        return JSON.parse(content) as unknown
-      } catch {
-        throw new Error('요약 API 응답이 JSON 형식이 아닙니다.')
+        res = await fetchImpl(`${API_BASE}/v1/chat/completions`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${key}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
+        })
+      } catch (err) {
+        // Network/timeout failure: nothing is recorded.
+        const msg = err instanceof Error ? err.message : String(err)
+        throw new MetaApiError(
+          langMsg(language, `요약 API 호출 실패: ${redact(msg, key)}`, `Summary API call failed: ${redact(msg, key)}`),
+          null,
+        )
       }
+
+      if (!res.ok) {
+        // No successful completion happened: nothing is recorded.
+        const text = await res.text().catch(() => '')
+        const snippet = redact(text.slice(0, 500), key)
+        throw new MetaApiError(
+          langMsg(
+            language,
+            `요약 API 오류 (HTTP ${res.status}): ${snippet}`,
+            `Summary API error (HTTP ${res.status}): ${snippet}`,
+          ),
+          res.status,
+        )
+      }
+
+      // 3. HTTP 200: parse the reply, then record actual token usage.
+      const parsed = (await res.json()) as {
+        choices?: Array<{ message?: { content?: unknown } }>
+        usage?: {
+          prompt_tokens?: unknown
+          completion_tokens?: unknown
+          completion_tokens_details?: { reasoning_tokens?: unknown }
+        }
+      }
+      const content = parsed.choices?.[0]?.message?.content
+      if (typeof content !== 'string') {
+        throw new Error(
+          langMsg(language, '요약 API 응답에 내용이 없습니다.', 'Summary API response has no content.'),
+        )
+      }
+
+      recordChatUsage(deps.ledger, model, parsed.usage, estimate)
+
+      if (opts.responseFormat) {
+        try {
+          return JSON.parse(content) as unknown
+        } catch {
+          throw new Error(
+            langMsg(language, '요약 API 응답이 JSON 형식이 아닙니다.', 'Summary API response is not valid JSON.'),
+          )
+        }
+      }
+      return content
+    } finally {
+      release(estimate)
     }
-    return content
   }
 
   return { transcribeChunk, chat }

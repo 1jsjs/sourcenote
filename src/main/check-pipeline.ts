@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
-import type { Summary } from '../shared/types'
+import type { AppLanguage, Summary } from '../shared/types'
 import {
   createSummary,
   getLatestCheck,
@@ -10,6 +10,7 @@ import {
   setSummaryStatus,
   type NewClaim,
 } from './db'
+import { langMsg } from './lang'
 import {
   applyVerifyResults,
   buildVerifyMessages,
@@ -41,8 +42,13 @@ import type { ChatMessage, MetaApi } from './meta-api'
 /** Maximum user sentences checked in one run. */
 export const MAX_CHECK_SENTENCES = 30
 
-/** Reason stored when no evidence cites a user sentence. */
+/** Reason stored when no evidence cites a user sentence (Korean; use the getter). */
 export const CHECK_ZERO_CITATION_REASON = '강의 자료에서 근거를 찾지 못했습니다'
+
+/** Fixed reason stored when no evidence cites a user sentence, in the check language. */
+export function checkZeroCitationReason(language: AppLanguage): string {
+  return langMsg(language, CHECK_ZERO_CITATION_REASON, 'No supporting evidence found in the lecture materials')
+}
 
 export const CHECK_LOCATE_SYSTEM_PROMPT =
   'You are a lecture evidence finder. For each user sentence below, return the numbers ' +
@@ -51,6 +57,21 @@ export const CHECK_LOCATE_SYSTEM_PROMPT =
   'Keep the sentence index and exact text as given: do NOT rewrite the sentences. ' +
   'Do not write segment or slide numbers like [3] or [P2] inside any text. ' +
   'Reply in Korean.'
+
+/** Locate system prompt in the requested output language. */
+export function checkLocateSystemPrompt(language: AppLanguage): string {
+  if (language === 'en') {
+    return (
+      'You are a lecture evidence finder. For each user sentence below, return the numbers ' +
+      'of the transcript segments ([n]) and/or slide pages ([Pk]) that are most relevant ' +
+      'to checking it. A sentence may have no relevant evidence: return empty arrays then. ' +
+      'Keep the sentence index and exact text as given: do NOT rewrite the sentences. ' +
+      'Do not write segment or slide numbers like [3] or [P2] inside any text. ' +
+      'Reply in English.'
+    )
+  }
+  return CHECK_LOCATE_SYSTEM_PROMPT
+}
 
 export const CHECK_LOCATE_SCHEMA_NAME = 'check_evidence_locate'
 
@@ -81,7 +102,7 @@ export const CHECK_LOCATE_SCHEMA = {
  * drop empties. Throws a Korean error when there is nothing or more than 30.
  * Pure and unit-tested.
  */
-export function splitUserSentences(text: string): string[] {
+export function splitUserSentences(text: string, language: AppLanguage = 'ko'): string[] {
   const sentences: string[] = []
   for (const line of text.split('\n')) {
     // A '.' between digits (3.14, 0.5) is a decimal point, not a sentence end.
@@ -93,10 +114,16 @@ export function splitUserSentences(text: string): string[] {
     }
   }
   if (sentences.length === 0) {
-    throw new Error('검증할 문장이 없습니다.')
+    throw new Error(langMsg(language, '검증할 문장이 없습니다.', 'No sentences to check'))
   }
   if (sentences.length > MAX_CHECK_SENTENCES) {
-    throw new Error(`한 번에 최대 ${MAX_CHECK_SENTENCES}문장까지 검증할 수 있습니다.`)
+    throw new Error(
+      langMsg(
+        language,
+        `한 번에 최대 ${MAX_CHECK_SENTENCES}문장까지 검증할 수 있습니다.`,
+        `You can check up to ${MAX_CHECK_SENTENCES} sentences at a time.`,
+      ),
+    )
   }
   return sentences
 }
@@ -111,6 +138,7 @@ export function buildCheckLocateMessages(
   sentences: string[],
   transcriptLines: string[],
   slideLines: string[] = [],
+  language: AppLanguage = 'ko',
 ): ChatMessage[] {
   const parts = sentences.map((s, i) => formatCheckSentenceLine(i, s))
   parts.push('Transcript:')
@@ -119,7 +147,7 @@ export function buildCheckLocateMessages(
     parts.push('Slides:')
     parts.push(...slideLines)
   }
-  return [{ role: 'system', content: CHECK_LOCATE_SYSTEM_PROMPT }, { role: 'user', content: parts.join('\n') }]
+  return [{ role: 'system', content: checkLocateSystemPrompt(language) }, { role: 'user', content: parts.join('\n') }]
 }
 
 export interface CheckLocateRaw {
@@ -198,6 +226,7 @@ export interface CheckPipelineDeps {
   db: DatabaseSync
   metaApi: MetaApi
   model?: string
+  language?: AppLanguage
 }
 
 function errorMessage(err: unknown): string {
@@ -211,15 +240,16 @@ export async function runCheckPipeline(
 ): Promise<Summary> {
   const { db, metaApi } = deps
   const model = deps.model ?? DEFAULT_SUMMARY_MODEL
+  const language: AppLanguage = deps.language ?? 'ko'
 
-  const sentences = splitUserSentences(notesText)
+  const sentences = splitUserSentences(notesText, language)
   const segments = listNoteSegments(db, noteId)
   const pages = listNotePages(db, noteId)
   if (segments.length === 0 && pages.length === 0) {
-    throw new Error('검증할 강의 자료가 없습니다')
+    throw new Error(langMsg(language, '검증할 강의 자료가 없습니다', 'No lecture evidence to check against'))
   }
 
-  const summary = createSummary(db, noteId, model, 'check')
+  const summary = createSummary(db, noteId, model, 'check', language)
   try {
     // 1. Locate the most relevant evidence per user sentence.
     const numbered = numberSegments(segments)
@@ -230,6 +260,7 @@ export async function runCheckPipeline(
         sentences,
         numbered.map((s) => s.line),
         numberedPages.map((p) => p.line),
+        language,
       ),
       responseFormat: { name: CHECK_LOCATE_SCHEMA_NAME, schema: CHECK_LOCATE_SCHEMA },
     })
@@ -250,7 +281,7 @@ export async function runCheckPipeline(
           : ('pending' as const),
       reason:
         c.segmentDbIds.length === 0 && c.pageDbIds.length === 0
-          ? CHECK_ZERO_CITATION_REASON
+          ? checkZeroCitationReason(language)
           : null,
       segmentIds: c.segmentDbIds,
       pageIds: c.pageDbIds,
@@ -279,12 +310,13 @@ export async function runCheckPipeline(
       }))
       const verifyRaw = await metaApi.chat({
         model,
-        messages: buildVerifyMessages(items),
+        messages: buildVerifyMessages(items, language),
         responseFormat: { name: VERIFY_SCHEMA_NAME, schema: VERIFY_SCHEMA },
       })
       const resolved = applyVerifyResults(
         items.map((item) => item.claimIdx),
         validateVerifyPayload(verifyRaw),
+        language,
       )
       for (const r of resolved) {
         const claimId = claimIdByIdx.get(r.claimIdx)

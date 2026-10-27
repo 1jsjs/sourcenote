@@ -17,6 +17,7 @@
     "add-pdf": "tsx scripts/add-pdf.ts",
     "correct": "tsx scripts/run-correct.ts",
     "check": "tsx scripts/run-check.ts",
+    "export-sample": "tsx scripts/export-sample.ts",
     "eval-wer": "tsx scripts/eval-wer.ts"
   },
   "dependencies": {
