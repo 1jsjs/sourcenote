@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type DragEvent,
+  type ReactNode,
+} from 'react'
 import type {
   AppLanguage,
   Claim,
@@ -18,32 +26,207 @@ import AudioPlayer from './AudioPlayer'
 import SlidePanel from './SlidePanel'
 import { sampleLanguageLabel, t, type MessageKey } from './i18n'
 
+/** Small inline icons drawn for this app (no icon font, no remote assets). */
+function WaveformIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <rect x="1.5" y="5" width="2" height="4" rx="1" fill="currentColor" />
+      <rect x="4.5" y="2.5" width="2" height="9" rx="1" fill="currentColor" />
+      <rect x="7.5" y="4" width="2" height="6" rx="1" fill="currentColor" />
+      <rect x="10.5" y="5.5" width="2" height="3" rx="1" fill="currentColor" />
+    </svg>
+  )
+}
+
+function PageIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <path
+        d="M3 1.5h5.5L11.5 4.5v8H3v-11z"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+      <path d="M8.5 1.5v3h3" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function CheckIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <path
+        d="M2.5 7.5l3.2 3.2L11.5 4"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function XIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <path
+        d="M3.5 3.5l7 7M10.5 3.5l-7 7"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function ChevronIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <path
+        d="M5 3l4 4-4 4"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+/**
+ * Neutral citation chip with a hover/focus preview card. The card shows the
+ * quoted source text already in the summary DTO; clicking jumps to it.
+ */
+function CiteChip({
+  kind,
+  label,
+  cardTitle,
+  cardRange,
+  cardQuote,
+  hint,
+  onActivate,
+}: {
+  kind: 'time' | 'page'
+  label: string
+  cardTitle: string
+  cardRange: string
+  cardQuote: string
+  hint: string
+  onActivate: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState({ top: 0, left: 0 })
+  const btnRef = useRef<HTMLButtonElement | null>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const place = useCallback(() => {
+    const rect = btnRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const width = 320
+    const height = 240
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))
+    let top = rect.bottom + 8
+    if (top + height > window.innerHeight - 8) top = Math.max(8, rect.top - height - 8)
+    setPos({ top, left })
+  }, [])
+
+  useEffect(
+    () => () => {
+      if (timer.current !== null) clearTimeout(timer.current)
+    },
+    [],
+  )
+
+  return (
+    <span
+      className="chip-wrap"
+      onMouseEnter={() => {
+        if (timer.current !== null) clearTimeout(timer.current)
+        timer.current = setTimeout(() => {
+          place()
+          setOpen(true)
+        }, 250)
+      }}
+      onMouseLeave={() => {
+        if (timer.current !== null) clearTimeout(timer.current)
+        setOpen(false)
+      }}
+    >
+      <button
+        ref={btnRef}
+        className={kind === 'time' ? 'cite-chip' : 'page-chip'}
+        onFocus={() => {
+          place()
+          setOpen(true)
+        }}
+        onBlur={() => setOpen(false)}
+        onClick={() => {
+          setOpen(false)
+          onActivate()
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') setOpen(false)
+        }}
+      >
+        <span className="chip-icon" aria-hidden="true">
+          {kind === 'time' ? <WaveformIcon /> : <PageIcon />}
+        </span>
+        {label}
+      </button>
+      {open && (
+        <span className="chip-card" role="tooltip" style={{ top: pos.top, left: pos.left }}>
+          <p className="chip-card-title">{cardTitle}</p>
+          <p className="chip-card-range">{cardRange}</p>
+          <p className="chip-card-quote">{cardQuote}</p>
+          <p className="chip-card-hint">{hint}</p>
+        </span>
+      )}
+    </span>
+  )
+}
+
 function ClaimList({
   lang,
   claims,
+  reveal,
+  pulsedId,
   onCiteSegment,
   onCitePage,
 }: {
   lang: AppLanguage
   claims: Claim[]
+  /** True only right after a verification run finished (progress event). */
+  reveal: boolean
+  /** Claim id currently pulsing from the evidence-bar stepper, if any. */
+  pulsedId: number | null
   onCiteSegment: (sourceId: number, segmentId: number, startMs: number) => void
   onCitePage: (sourceId: number, pageNo: number, displayName: string) => void
 }) {
   return (
-    <ul className="claims">
-      {claims.map((claim) => {
+    <ul className={reveal ? 'claims reveal' : 'claims'}>
+      {claims.map((claim, idx) => {
         const unsupported = claim.verdict === 'unsupported'
         const pending = claim.verdict === 'pending'
         return (
-          <li key={claim.id} className="claim">
+          <li
+            key={claim.id}
+            id={`claim-${claim.id}`}
+            className={pulsedId === claim.id ? 'claim pulse' : 'claim'}
+            style={{ '--i': idx } as CSSProperties}
+          >
             <span className="gutter" aria-hidden="true">
               {!pending &&
                 (unsupported ? (
-                  <span className="mark-no">✕</span>
+                  <span className="mark-no">
+                    <XIcon />
+                  </span>
                 ) : (
-                  <span className="mark-ok">✓</span>
+                  <span className="mark-ok">
+                    <CheckIcon />
+                  </span>
                 ))}
             </span>
+            <span className="margin-line" aria-hidden="true" />
             <div className="claim-body">
               <span
                 className={
@@ -57,29 +240,33 @@ function ClaimList({
                 {claim.text}
               </span>
               {unsupported && (
-                <span className="badge-unsupported">{t(lang, 'notInSources')}</span>
+                <span className="claim-label">{t(lang, 'notInSources')}</span>
               )}
               {(claim.citations.length > 0 || claim.pageCitations.length > 0) && (
                 <div className="chips">
                   {claim.citations.map((cite) => (
-                    <button
+                    <CiteChip
                       key={cite.segmentId}
-                      className="cite-chip"
-                      title={cite.text}
-                      onClick={() => onCiteSegment(cite.sourceId, cite.segmentId, cite.startMs)}
-                    >
-                      {formatHms(cite.startMs)}
-                    </button>
+                      kind="time"
+                      label={formatShort(cite.startMs)}
+                      cardTitle={cite.sourceDisplayName}
+                      cardRange={`${formatShort(cite.startMs)}–${formatShort(cite.endMs)}`}
+                      cardQuote={cite.text}
+                      hint={t(lang, 'chipPlayHint')}
+                      onActivate={() => onCiteSegment(cite.sourceId, cite.segmentId, cite.startMs)}
+                    />
                   ))}
                   {claim.pageCitations.map((cite) => (
-                    <button
+                    <CiteChip
                       key={cite.pageId}
-                      className="page-chip"
-                      title={cite.text}
-                      onClick={() => onCitePage(cite.sourceId, cite.pageNo, cite.sourceDisplayName)}
-                    >
-                      p.{cite.pageNo}
-                    </button>
+                      kind="page"
+                      label={`p.${cite.pageNo}`}
+                      cardTitle={cite.sourceDisplayName}
+                      cardRange={`p.${cite.pageNo}`}
+                      cardQuote={cite.text.slice(0, 280)}
+                      hint={t(lang, 'chipSlideHint')}
+                      onActivate={() => onCitePage(cite.sourceId, cite.pageNo, cite.sourceDisplayName)}
+                    />
                   ))}
                 </div>
               )}
@@ -91,6 +278,50 @@ function ClaimList({
         )
       })}
     </ul>
+  )
+}
+
+/**
+ * "13 sentences · 11 cited and verified · 2 not in sources". The red count
+ * is a button that steps through the flagged sentences.
+ */
+function EvidenceBar({
+  lang,
+  claims,
+  onStepFlag,
+}: {
+  lang: AppLanguage
+  claims: Claim[]
+  onStepFlag: (claimId: number) => void
+}) {
+  const flaggedIds = claims.filter((c) => c.verdict === 'unsupported').map((c) => c.id)
+  const supported = claims.filter((c) => c.verdict === 'supported').length
+  const cursor = useRef(0)
+  return (
+    <p className="evidence-bar">
+      <span>{t(lang, 'evidenceSentences', { count: claims.length })}</span>
+      <span className="evidence-sep" aria-hidden="true">
+        ·
+      </span>
+      <span>{t(lang, 'evidenceCited', { count: supported })}</span>
+      <span className="evidence-sep" aria-hidden="true">
+        ·
+      </span>
+      {flaggedIds.length > 0 ? (
+        <button
+          className="evidence-flag"
+          onClick={() => {
+            const next = flaggedIds[cursor.current % flaggedIds.length]
+            cursor.current += 1
+            onStepFlag(next)
+          }}
+        >
+          {t(lang, 'evidenceFlagged', { count: flaggedIds.length })}
+        </button>
+      ) : (
+        <span>{t(lang, 'evidenceFlagged', { count: 0 })}</span>
+      )}
+    </p>
   )
 }
 
@@ -114,13 +345,16 @@ const STATUS_KEY: Record<SourceStatus, MessageKey> = {
   error: 'statusError',
 }
 
-function formatHms(ms: number): string {
+/**
+ * Short clock time for chips and stamps: `12:34`, or `1:02:15` past an hour.
+ */
+function formatShort(ms: number): string {
   const totalSec = Math.max(0, Math.floor(ms / 1000))
   const h = Math.floor(totalSec / 3600)
   const m = Math.floor((totalSec % 3600) / 60)
   const s = totalSec % 60
   const pad = (n: number): string => String(n).padStart(2, '0')
-  return `${pad(h)}:${pad(m)}:${pad(s)}`
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`
 }
 
 const IS_MAC =
@@ -168,6 +402,16 @@ export default function App() {
     displayName: string
   } | null>(null)
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pulseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** Summary id whose verification just finished live (drives the reveal). */
+  const [revealedSummaryId, setRevealedSummaryId] = useState<number | null>(null)
+  /** True right after a notes check finished live (drives the reveal). */
+  const [checkReveal, setCheckReveal] = useState(false)
+  /** Claim id briefly pulsing from the evidence-bar stepper, if any. */
+  const [pulsedClaimId, setPulsedClaimId] = useState<number | null>(null)
+  /** True while files are dragged over the note view. */
+  const [dragging, setDragging] = useState(false)
+  const dragDepth = useRef(0)
 
   const refreshSpend = useCallback(async () => {
     setSpend(await window.sourcenote.getSpend())
@@ -262,6 +506,12 @@ export default function App() {
     setCorrectionsRunning(false)
     setCorrectionStage(null)
     setCheckRunning(false)
+    // Opening a note is static: never replay the verification reveal.
+    setRevealedSummaryId(null)
+    setCheckReveal(false)
+    setPulsedClaimId(null)
+    setDragging(false)
+    dragDepth.current = 0
   }, [selectedNoteId, refreshSources, refreshSummary, refreshCorrections, refreshCheck])
 
   useEffect(() => {
@@ -283,6 +533,10 @@ export default function App() {
       if (event.stage === 'done' || event.stage === 'error') {
         setSummaryRunning(false)
         if (event.stage === 'error' && event.message) setError(event.message)
+        // A live finish animates the reveal once; opening a note stays static.
+        if (event.stage === 'done' && event.summaryId !== null) {
+          setRevealedSummaryId(event.summaryId)
+        }
         void refreshSummary(event.noteId)
         void refreshSpend()
       }
@@ -307,6 +561,7 @@ export default function App() {
   useEffect(
     () => () => {
       if (highlightTimer.current !== null) clearTimeout(highlightTimer.current)
+      if (pulseTimer.current !== null) clearTimeout(pulseTimer.current)
     },
     [],
   )
@@ -464,9 +719,12 @@ export default function App() {
     if (selectedNoteId === null || checkText.trim().length === 0) return
     setError(null)
     setCheckRunning(true)
+    setCheckReveal(false)
     try {
       const result = await window.sourcenote.runCheck(selectedNoteId, checkText)
       setCheckResult(result)
+      // A live finish animates the reveal once.
+      setCheckReveal(true)
       await refreshSpend()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -480,12 +738,71 @@ export default function App() {
     requestAnimationFrame(() => {
       const element = document.getElementById(`segment-${segmentId}`)
       if (element) {
-        element.scrollIntoView({ block: 'center' })
+        element.scrollIntoView({ block: 'center', behavior: 'smooth' })
         setHighlightedSegmentId(segmentId)
         if (highlightTimer.current !== null) clearTimeout(highlightTimer.current)
         highlightTimer.current = setTimeout(() => setHighlightedSegmentId(null), 2000)
       }
     })
+  }
+
+  /** Evidence-bar stepper: scroll to a flagged sentence and briefly pulse it. */
+  const stepToClaim = (claimId: number): void => {
+    requestAnimationFrame(() => {
+      document
+        .getElementById(`claim-${claimId}`)
+        ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      setPulsedClaimId(claimId)
+      if (pulseTimer.current !== null) clearTimeout(pulseTimer.current)
+      pulseTimer.current = setTimeout(() => setPulsedClaimId(null), 1200)
+    })
+  }
+
+  /** Registers files dropped onto the note view via the preload path resolver. */
+  const handleDropFiles = async (noteId: number, files: File[]): Promise<void> => {
+    const paths = files
+      .map((file) => window.sourcenote.getPathForFile(file))
+      .filter((p) => p.length > 0)
+    if (paths.length === 0) return
+    setError(null)
+    try {
+      const { ignored } = await window.sourcenote.addPaths(noteId, paths)
+      await refreshSources(noteId)
+      if (ignored.length > 0) {
+        setError(t(lang, 'dropIgnored', { names: ignored.join(', ') }))
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+      await refreshSources(noteId)
+    }
+  }
+
+  const handleDragEnter = (e: DragEvent<HTMLElement>): void => {
+    if (selectedNoteId === null || !e.dataTransfer.types.includes('Files')) return
+    e.preventDefault()
+    dragDepth.current += 1
+    setDragging(true)
+  }
+
+  const handleDragLeave = (e: DragEvent<HTMLElement>): void => {
+    if (selectedNoteId === null) return
+    e.preventDefault()
+    dragDepth.current = Math.max(0, dragDepth.current - 1)
+    if (dragDepth.current === 0) setDragging(false)
+  }
+
+  const handleDragOver = (e: DragEvent<HTMLElement>): void => {
+    if (selectedNoteId === null || !e.dataTransfer.types.includes('Files')) return
+    e.preventDefault()
+  }
+
+  const handleDrop = (e: DragEvent<HTMLElement>): void => {
+    if (selectedNoteId === null) return
+    e.preventDefault()
+    dragDepth.current = 0
+    setDragging(false)
+    if (!e.dataTransfer.types.includes('Files')) return
+    void handleDropFiles(selectedNoteId, Array.from(e.dataTransfer.files))
   }
 
   /** Switches the player to the segment's source if needed, seeks and plays. */
@@ -575,17 +892,18 @@ export default function App() {
   const sourcePill = (source: Source): ReactNode => {
     const progress = progressBySource[source.id]
     const isAudio = source.kind === 'audio'
-    const meta = isAudio
-      ? source.duration_ms !== null
-        ? formatHms(source.duration_ms)
-        : null
-      : source.status === 'done'
-        ? t(lang, 'slidesLabel', { count: pageCountBySource.get(source.id) ?? 0 })
-        : null
-    const transcribing =
-      (source.status === 'transcribing' || source.status === 'converting') &&
-      progress &&
-      progress.totalChunks > 0
+    const meta =
+      isAudio && source.duration_ms !== null
+        ? formatShort(source.duration_ms)
+        : !isAudio && source.status === 'done'
+          ? t(lang, 'slidesLabel', { count: pageCountBySource.get(source.id) ?? 0 })
+          : null
+    const active = source.status === 'transcribing' || source.status === 'converting'
+    const showProgress = active && progress !== undefined && progress.totalChunks > 0
+    const pct =
+      progress !== undefined && progress.totalChunks > 0
+        ? Math.min(100, (progress.chunk / progress.totalChunks) * 100)
+        : 0
     return (
       <span
         key={source.id}
@@ -596,8 +914,12 @@ export default function App() {
             : source.display_name
         }
       >
-        <span className={isAudio ? 'kind-label audio' : 'kind-label pdf'}>
-          {isAudio ? t(lang, 'audioLabel') : t(lang, 'pdfLabel')}
+        <span
+          className="source-icon"
+          role="img"
+          aria-label={isAudio ? t(lang, 'audioLabel') : t(lang, 'pdfLabel')}
+        >
+          {isAudio ? <WaveformIcon /> : <PageIcon />}
         </span>
         <span className="pill-name">{source.display_name}</span>
         {meta !== null && <span className="pill-meta">{meta}</span>}
@@ -610,34 +932,21 @@ export default function App() {
                 : 'pill-status busy'
           }
         >
-          {transcribing
+          {showProgress && progress !== undefined
             ? t(lang, 'transcribingProgress', {
                 done: progress.chunk,
                 total: progress.totalChunks,
               })
             : t(lang, STATUS_KEY[source.status])}
         </span>
-        {transcribing && (
-          <span className="pill-progress" aria-hidden="true">
-            <span style={{ width: `${Math.min(100, (progress.chunk / progress.totalChunks) * 100)}%` }} />
+        {showProgress && (
+          <span className="source-progress" aria-hidden="true">
+            <span style={{ width: `${pct}%` }} />
           </span>
         )}
       </span>
     )
   }
-
-  const countLine = (claims: Claim[]): ReactNode => (
-    <p className="counts-line">
-      <span className="dot dot-ok" aria-hidden="true">
-        ●
-      </span>{' '}
-      {t(lang, 'verifiedCount')} {claims.filter((c) => c.verdict === 'supported').length} ·{' '}
-      <span className="dot dot-no" aria-hidden="true">
-        ●
-      </span>{' '}
-      {t(lang, 'notInSources')} {claims.filter((c) => c.verdict === 'unsupported').length}
-    </p>
-  )
 
   const transcriptView = (
     <>
@@ -665,7 +974,7 @@ export default function App() {
                       title={t(lang, 'playFromHere')}
                       onClick={() => handleTimestampClick(source.id, seg.id, seg.start_ms)}
                     >
-                      {formatHms(seg.start_ms)}–{formatHms(seg.end_ms)}
+                      {formatShort(seg.start_ms)}–{formatShort(seg.end_ms)}
                     </button>{' '}
                     {seg.original_text !== null && (
                       <span
@@ -848,7 +1157,13 @@ export default function App() {
           </div>
         </aside>
 
-        <main className="content">
+        <main
+          className={dragging ? 'content dragging' : 'content'}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+        >
           {selectedNoteId === null || selectedNote === null ? (
             <div className="empty-state">
               <p className="wordmark-large">{t(lang, 'appTitle')}</p>
@@ -888,13 +1203,61 @@ export default function App() {
                 )}
               </div>
 
+              {sources.length === 0 ? (
+                <div className="dropzone">
+                  <svg
+                    className="dropzone-icon"
+                    width="28"
+                    height="28"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 15V4" />
+                    <path d="M7.5 8.5 12 4l4.5 4.5" />
+                    <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+                  </svg>
+                  <p className="dropzone-title">{t(lang, 'dropTitle')}</p>
+                  <div className="drop-actions">
+                    <button onClick={() => void handleAddAudio()}>{t(lang, 'addAudio')}</button>
+                    <button onClick={() => void handleAddPdf()}>{t(lang, 'addPdf')}</button>
+                  </div>
+                  <ul className="steps">
+                    <li className="step">
+                      <span className="step-num" aria-hidden="true">
+                        1
+                      </span>
+                      {t(lang, 'stepTranscribe')}
+                    </li>
+                    <li className="step-arrow" aria-hidden="true">
+                      <ChevronIcon />
+                    </li>
+                    <li className="step">
+                      <span className="step-num" aria-hidden="true">
+                        2
+                      </span>
+                      {t(lang, 'stepSummarize')}
+                    </li>
+                    <li className="step-arrow" aria-hidden="true">
+                      <ChevronIcon />
+                    </li>
+                    <li className="step">
+                      <span className="step-num" aria-hidden="true">
+                        3
+                      </span>
+                      {t(lang, 'stepVerify')}
+                    </li>
+                  </ul>
+                </div>
+              ) : (
+                <>
               <div className="sources-row">
                 <span className="sources-label">{t(lang, 'sourcesHeading')}</span>
-                {sources.length === 0 ? (
-                  <span className="sources-empty">{t(lang, 'noSources')}</span>
-                ) : (
-                  sources.map(sourcePill)
-                )}
+                {sources.map(sourcePill)}
               </div>
 
               <div className="content-actions">
@@ -946,13 +1309,21 @@ export default function App() {
                       <div className="section-head">
                         <h3 className="section-title">{t(lang, 'citedSummary')}</h3>
                       </div>
-                      {countLine(summary.claims)}
+                      <div className="summary-col">
+                      <EvidenceBar
+                        lang={lang}
+                        claims={summary.claims}
+                        onStepFlag={stepToClaim}
+                      />
                       <ClaimList
                         lang={lang}
                         claims={summary.claims}
+                        reveal={summary.id === revealedSummaryId}
+                        pulsedId={pulsedClaimId}
                         onCiteSegment={handleCiteClick}
                         onCitePage={handlePageCiteClick}
                       />
+                      </div>
                     </div>
                   )}
                   {corrections.length > 0 && (
@@ -1002,7 +1373,10 @@ export default function App() {
                                       }
                                     }}
                                   >
-                                    {formatHms(c.startMs)}
+                                    <span className="chip-icon" aria-hidden="true">
+                                      <WaveformIcon />
+                                    </span>
+                                    {formatShort(c.startMs)}
                                   </button>{' '}
                                   <span className="correction-before">{c.beforeText}</span>
                                   {' → '}
@@ -1046,15 +1420,21 @@ export default function App() {
                       </button>
                     </div>
                     {checkResult !== null && checkResult.claims.length > 0 && (
-                      <>
-                        {countLine(checkResult.claims)}
+                      <div className="summary-col">
+                        <EvidenceBar
+                          lang={lang}
+                          claims={checkResult.claims}
+                          onStepFlag={stepToClaim}
+                        />
                         <ClaimList
                           lang={lang}
                           claims={checkResult.claims}
+                          reveal={checkReveal}
+                          pulsedId={pulsedClaimId}
                           onCiteSegment={handleCiteClick}
                           onCitePage={handlePageCiteClick}
                         />
-                      </>
+                      </div>
                     )}
                   </div>
                 </section>
@@ -1095,6 +1475,8 @@ export default function App() {
                   )}
                 </section>
               </div>
+                </>
+              )}
             </>
           )}
         </main>
@@ -1107,7 +1489,7 @@ export default function App() {
             </p>
             <div className="modal-actions">
               <button onClick={() => setDeleteTarget(null)}>{t(lang, 'cancel')}</button>
-              <button className="danger-btn" onClick={() => void handleDeleteConfirm()}>
+              <button onClick={() => void handleDeleteConfirm()}>
                 {t(lang, 'delete')}
               </button>
             </div>

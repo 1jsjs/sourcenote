@@ -155,6 +155,17 @@ export interface SourcenoteApi {
   addAudioSource(noteId: number): Promise<Source | null>
   /** Opens a PDF dialog, registers the source and extracts per-page text. */
   addPdfSource(noteId: number): Promise<Source | null>
+  /**
+   * Registers dropped file paths: audio starts transcription, PDFs start
+   * slide extraction. Returns what was added plus the ignored file names
+   * (anything else); throws when nothing could be added.
+   */
+  addPaths(noteId: number, paths: string[]): Promise<{ added: Source[]; ignored: string[] }>
+  /**
+   * Resolves a renderer-side dropped File to its filesystem path
+   * (Electron `webUtils.getPathForFile`). Synchronous; empty when unknown.
+   */
+  getPathForFile(file: unknown): string
   listSegments(sourceId: number): Promise<Segment[]>
   /** All extracted PDF pages of a note in order (for page counts). */
   listPages(noteId: number): Promise<NotePage[]>

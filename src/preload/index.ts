@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type {
   AppSettings,
   CorrectionProgressEvent,
@@ -19,6 +19,11 @@ const api: SourcenoteApi = {
   listSources: (noteId) => ipcRenderer.invoke('sources:list', noteId),
   addAudioSource: (noteId) => ipcRenderer.invoke('sources:addAudio', noteId),
   addPdfSource: (noteId): Promise<Source | null> => ipcRenderer.invoke('sources:addPdf', noteId),
+  addPaths: (noteId, paths): Promise<{ added: Source[]; ignored: string[] }> =>
+    ipcRenderer.invoke('sources:addPaths', noteId, paths),
+  // The dropped File keeps its native path across the bridge, so
+  // webUtils can resolve it here in the preload.
+  getPathForFile: (file: unknown): string => webUtils.getPathForFile(file as never),
   listSegments: (sourceId) => ipcRenderer.invoke('segments:list', sourceId),
   listPages: (noteId): Promise<NotePage[]> => ipcRenderer.invoke('pages:list', noteId),
   getSpend: () => ipcRenderer.invoke('budget:getSpend'),

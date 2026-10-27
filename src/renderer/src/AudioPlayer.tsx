@@ -2,14 +2,31 @@ import { useEffect, useRef, useState } from 'react'
 import type { AppLanguage } from '../../shared/types'
 import { t } from './i18n'
 
-/** Formats milliseconds as hh:mm:ss (shared with the note view). */
+/** Short clock time: `12:34`, or `1:02:15` past an hour. */
 export function formatHms(ms: number): string {
   const totalSec = Math.max(0, Math.floor(ms / 1000))
   const h = Math.floor(totalSec / 3600)
   const m = Math.floor((totalSec % 3600) / 60)
   const s = totalSec % 60
   const pad = (n: number): string => String(n).padStart(2, '0')
-  return `${pad(h)}:${pad(m)}:${pad(s)}`
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`
+}
+
+function PlayIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+      <path d="M3.5 2.2v7.6L10 6 3.5 2.2z" fill="currentColor" />
+    </svg>
+  )
+}
+
+function PauseIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+      <rect x="3" y="2.2" width="2.2" height="7.6" rx="0.6" fill="currentColor" />
+      <rect x="6.8" y="2.2" width="2.2" height="7.6" rx="0.6" fill="currentColor" />
+    </svg>
+  )
 }
 
 interface AudioPlayerProps {
@@ -77,7 +94,10 @@ export default function AudioPlayer({
   const maxSec = durationMs / 1000
   return (
     <div className="player" role="region" aria-label={t(lang, 'playerRegion')}>
-      <button onClick={toggle}>{playing ? t(lang, 'pause') : t(lang, 'play')}</button>
+      <button onClick={toggle} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        {playing ? <PauseIcon /> : <PlayIcon />}
+        {playing ? t(lang, 'pause') : t(lang, 'play')}
+      </button>
       <span className="player-name" title={sourceName}>
         {sourceName}
       </span>

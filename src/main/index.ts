@@ -35,6 +35,7 @@ import { langMsg } from './lang'
 import { mediaContentTypeForPath, parseMediaSourceUrl, parseRangeHeader } from './media'
 import { createMetaApi } from './meta-api'
 import { ingestPdfSource } from './pdf'
+import { AUDIO_EXTENSIONS, classifyPaths } from './source-paths'
 import { runAudioPipeline } from './pipeline'
 import { importSampleNote, listSampleNotes, resolveSamplesDir } from './sample'
 import { loadSettings, parseSettings, saveSettings } from './settings'
@@ -44,6 +45,7 @@ import type {
   AppLanguage,
   CorrectionProgressEvent,
   ProgressEvent,
+  Source,
   SummaryProgressEvent,
 } from '../shared/types'
 
@@ -57,9 +59,7 @@ protocol.registerSchemesAsPrivileged([
 
 // electron-vite injects the CommonJS `__dirname` shim into ESM main builds.
 
-const AUDIO_FILTERS = [
-  { name: '오디오', extensions: ['wav', 'mp3', 'm4a', 'aac', 'flac', 'ogg', 'webm', 'mp4', 'mov'] },
-]
+const AUDIO_FILTERS = [{ name: '오디오', extensions: [...AUDIO_EXTENSIONS] }]
 
 const PDF_FILTERS = [{ name: 'PDF', extensions: ['pdf'] }]
 
@@ -232,20 +232,33 @@ function registerIpc(getWindow: () => BrowserWindow | null): void {
     typeof noteId === 'number' ? listNotePages(db, noteId) : [],
   )
 
-  ipcMain.handle('sources:addPdf', async (_e, noteId: unknown) => {
-    if (typeof noteId !== 'number') return null
-    const win = getWindow()
-    const options = {
-      title: 'PDF 파일 선택',
-      properties: ['openFile' as const],
-      filters: PDF_FILTERS,
-    }
-    const picked = win
-      ? await dialog.showOpenDialog(win, options)
-      : await dialog.showOpenDialog(options)
-    if (picked.canceled || picked.filePaths.length === 0) return null
+  /** Registers an audio file and starts transcription in the background. */
+  const registerAudioPath = (noteId: number, filePath: string): Source => {
+    const source = createSource(db, {
+      noteId,
+      kind: 'audio',
+      originalPath: filePath,
+      displayName: path.basename(filePath),
+    })
 
-    const filePath = picked.filePaths[0]
+    // Long-running: start in background; progress arrives via pipeline:progress.
+    void runAudioPipeline(
+      {
+        db,
+        metaApi,
+        mediaDir: mediaDirPath(dataDir),
+        onProgress: (event) => sendProgress(getWindow(), event),
+      },
+      source.id,
+    ).catch(() => {
+      // Status/message already stored on the source and sent via progress.
+    })
+
+    return source
+  }
+
+  /** Registers a PDF file and starts text extraction in the background. */
+  const registerPdfPath = (noteId: number, filePath: string): Source => {
     const source = createSource(db, {
       noteId,
       kind: 'pdf',
@@ -272,6 +285,50 @@ function registerIpc(getWindow: () => BrowserWindow | null): void {
       })
 
     return source
+  }
+
+  ipcMain.handle('sources:addPdf', async (_e, noteId: unknown) => {
+    if (typeof noteId !== 'number') return null
+    const win = getWindow()
+    const options = {
+      title: 'PDF 파일 선택',
+      properties: ['openFile' as const],
+      filters: PDF_FILTERS,
+    }
+    const picked = win
+      ? await dialog.showOpenDialog(win, options)
+      : await dialog.showOpenDialog(options)
+    if (picked.canceled || picked.filePaths.length === 0) return null
+
+    return registerPdfPath(noteId, picked.filePaths[0])
+  })
+
+  /**
+   * Registers dropped files: audio extensions start transcription, PDFs
+   * start slide extraction, anything else is reported back (by file name)
+   * so the renderer can show a localized error listing them.
+   */
+  ipcMain.handle('sources:addPaths', (_e, noteId: unknown, paths: unknown) => {
+    if (typeof noteId !== 'number') {
+      throw new Error(langMsg(currentLanguage(), '노트를 찾을 수 없습니다.', 'Note not found.'))
+    }
+    const files = Array.isArray(paths) ? paths.filter((p): p is string => typeof p === 'string') : []
+    const { audio, pdf, ignored } = classifyPaths(files)
+    const added: Source[] = [
+      ...audio.map((filePath) => registerAudioPath(noteId, filePath)),
+      ...pdf.map((filePath) => registerPdfPath(noteId, filePath)),
+    ]
+    if (added.length === 0) {
+      const names = ignored.map((filePath) => path.basename(filePath)).join(', ')
+      throw new Error(
+        langMsg(
+          currentLanguage(),
+          `지원하지 않는 파일입니다: ${names}`,
+          `Unsupported files: ${names}`,
+        ),
+      )
+    }
+    return { added, ignored: ignored.map((filePath) => path.basename(filePath)) }
   })
 
   ipcMain.handle('budget:getSpend', () => ({ spentUsd: ledger.totalUsd, capUsd: budgetCapUsd() }))
@@ -354,28 +411,7 @@ function registerIpc(getWindow: () => BrowserWindow | null): void {
       : await dialog.showOpenDialog(options)
     if (picked.canceled || picked.filePaths.length === 0) return null
 
-    const filePath = picked.filePaths[0]
-    const source = createSource(db, {
-      noteId,
-      kind: 'audio',
-      originalPath: filePath,
-      displayName: path.basename(filePath),
-    })
-
-    // Long-running: start in background; progress arrives via pipeline:progress.
-    void runAudioPipeline(
-      {
-        db,
-        metaApi,
-        mediaDir: mediaDirPath(dataDir),
-        onProgress: (event) => sendProgress(getWindow(), event),
-      },
-      source.id,
-    ).catch(() => {
-      // Status/message already stored on the source and sent via progress.
-    })
-
-    return source
+    return registerAudioPath(noteId, picked.filePaths[0])
   })
 }
 
@@ -385,8 +421,8 @@ function createWindow(): BrowserWindow {
     height: 860,
     minWidth: 1080,
     minHeight: 680,
-    // Paper background so the first paint never flashes white.
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1B1916' : '#F5F0E6',
+    // Page background so the first paint never flashes white.
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1C1F26' : '#FCFCFA',
     title: 'Sourcenote',
     // macOS: the app header is the drag region (traffic lights float over it).
     ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset' as const } : {}),
