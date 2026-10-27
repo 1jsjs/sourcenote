@@ -16,6 +16,10 @@ Reference: the official human transcript published by SEE (`MachineLearning-Lect
 | As is | 9,078 | 10,375 | 2,791 | 30.7% |
 | Fillers (um, uh) and immediate repeats removed from both | 9,061 | 9,561 | 2,032 | 22.4% |
 
+Wall-clock time for the whole lecture: about 10 minutes with chunks sent one at a time;
+**3 min 51 s** with 3 chunks in parallel (second run: 320 segments, WER 30.9% as is / 22.2% cleaned,
+so accuracy is unchanged).
+
 The reference is an edited transcript (fillers and false starts removed), so the second row is
 the fairer number. The recording is a 2008 classroom capture; student questions are often
 inaudible. Reproduce: `npm run eval-wer -- <sourceId> MachineLearning-Lecture02.html`.
