@@ -1,0 +1,13 @@
+node_modules/
+out/
+dist/
+release/
+.env
+.env.*
+data/
+*.sqlite
+*.db
+usage-ledger*.json
+usage-ledger*.json.tmp
+.DS_Store
+coverage/
