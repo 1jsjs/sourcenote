@@ -1,0 +1,25 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@page { size: 1280px 720px; margin: 0 }
+body { margin:0; font-family: -apple-system, "Apple SD Gothic Neo", sans-serif; color:#1d1d1f }
+.s { width:1280px; height:720px; box-sizing:border-box; padding:80px 100px; page-break-after: always; position:relative; background:#fbfaf7 }
+.s:last-child { page-break-after: auto }
+h1 { font-size:60px; margin:0 0 24px } h2 { font-size:44px; margin:0 0 40px; border-bottom:3px solid #1d1d1f; padding-bottom:16px }
+li { font-size:32px; line-height:1.6 } p { font-size:30px; color:#555 }
+.n { position:absolute; right:60px; bottom:40px; font-size:22px; color:#888 }
+</style></head><body>
+<div class="s" style="display:flex;flex-direction:column;justify-content:center"><h1>Gradient Descent &amp; Learning Rate</h1><p>경사 하강법과 학습률 · Week 4</p><div class="n">1</div></div>
+<div class="s"><h2>Gradient Descent</h2><ul>
+<li>Update weights in the direction that lowers the <b>loss function</b></li>
+<li><b>Learning rate</b> (학습률): step size of each update</li>
+<li>Too large → overshoots the minimum, loss may <b>diverge</b></li>
+<li>Too small → slow training, may not <b>converge</b> within the epochs</li></ul><div class="n">2</div></div>
+<div class="s"><h2>Stochastic Gradient Descent (SGD)</h2><ul>
+<li>Compute the gradient on a <b>mini-batch</b> instead of the full dataset</li>
+<li>Faster updates per step</li>
+<li>Gradient noise can help escape shallow <b>local minima</b></li></ul><div class="n">3</div></div>
+<div class="s"><h2>Learning Rate Scheduling</h2><ul>
+<li><b>Step decay</b>: halve the learning rate every few epochs</li>
+<li><b>Cosine annealing</b>: decrease along a cosine curve</li>
+<li><b>Warmup</b>: start small and increase the learning rate during the first 5 epochs</li></ul>
+<p>Next: Momentum, Adam optimizer</p><div class="n">4</div></div>
+</body></html>
