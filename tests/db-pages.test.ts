@@ -33,12 +33,12 @@ describe('db v3 (slide pages)', () => {
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
-  it('opens at user_version 3', () => {
+  it('opens at user_version 5', () => {
     const row = db.prepare('PRAGMA user_version').get() as { user_version: number }
-    expect(row.user_version).toBe(3)
+    expect(row.user_version).toBe(5)
   })
 
-  it('migrates a v2 database file to v3 without losing data', () => {
+  it('migrates a v2 database file to v5 without losing data', () => {
     const note = createNote(db, '기존 노트')
     const source = createSource(db, {
       noteId: note.id,
@@ -56,12 +56,16 @@ describe('db v3 (slide pages)', () => {
     // Roll back to the v2 shape to simulate a v2 file.
     db.exec('DROP TABLE claim_page_citations')
     db.exec('DROP TABLE pages')
+    // A real v2 file also lacks the stage-4 columns/tables.
+    db.exec('DROP TABLE corrections')
+    db.exec('ALTER TABLE segments DROP COLUMN original_text')
+    db.exec('ALTER TABLE summaries DROP COLUMN kind')
     db.exec('PRAGMA user_version = 2')
     db.close()
 
     db = openDb(dbFile)
     const row = db.prepare('PRAGMA user_version').get() as { user_version: number }
-    expect(row.user_version).toBe(3)
+    expect(row.user_version).toBe(5)
     // v2 data survived the migration.
     const latest = getLatestSummary(db, note.id)
     expect(latest?.claims).toHaveLength(1)

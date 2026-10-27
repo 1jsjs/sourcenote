@@ -8,7 +8,9 @@ import {
   MISSING_RESULT_REASON,
   numberSegments,
   splitBatches,
+  stripClaimCitationMarkers,
   SUMMARY_SCHEMA,
+  SUMMARY_SYSTEM_PROMPT,
   validateSummaryPayload,
   validateVerifyPayload,
   VERIFY_BATCH_SIZE,
@@ -149,6 +151,30 @@ describe('verification batching and results', () => {
         ],
       }),
     ).toEqual([{ claimIndex: 0, supported: false, reason: '없음' }])
+  })
+})
+
+describe('stripClaimCitationMarkers', () => {
+  it('strips embedded [n]/[Pn] markers and tidies leftover spaces', () => {
+    expect(stripClaimCitationMarkers('오늘은 경사하강법(Gradient Descent)을 다룬다 [1][P1].')).toBe(
+      '오늘은 경사하강법(Gradient Descent)을 다룬다.',
+    )
+    expect(stripClaimCitationMarkers('주장 [3] 중간 [P2] 끝')).toBe('주장 중간 끝')
+    expect(stripClaimCitationMarkers('마커 없는 문장.')).toBe('마커 없는 문장.')
+    expect(stripClaimCitationMarkers('[1]')).toBe('')
+  })
+
+  it('mapped claims never keep embedded markers', () => {
+    const byNumber = idByNumberMap(numberSegments(SEGMENTS))
+    const mapped = mapSummaryClaims(
+      validateSummaryPayload({ claims: [{ text: '주장이다 [1][P1].', segment_ids: [1] }] }),
+      byNumber,
+    )
+    expect(mapped[0].text).toBe('주장이다.')
+  })
+
+  it('the summary prompt forbids inline citation markers', () => {
+    expect(SUMMARY_SYSTEM_PROMPT).toContain('Do not write segment or slide numbers')
   })
 })
 

@@ -142,6 +142,7 @@ export const SUMMARY_SYSTEM_PROMPT =
   'definitions, and figures shown on slides.\n' +
   'Use only information stated in the transcript or slides. Do not use outside knowledge.\n' +
   'Do not merge unrelated points into a single claim.\n' +
+  'Do not write segment or slide numbers like [3] or [P2] inside the claim text.\n' +
   'Reply in Korean.'
 
 export const SUMMARY_SCHEMA_NAME = 'lecture_summary'
@@ -220,6 +221,19 @@ export function validateSummaryPayload(raw: unknown): SummaryClaimRaw[] {
   })
 }
 
+/**
+ * Removes bracketed citation markers the model may have embedded in the
+ * claim text (e.g. `경사하강법을 다룬다 [1][P1]`), then trims and tidies
+ * spaces left before final punctuation. Pure and unit-tested.
+ */
+export function stripClaimCitationMarkers(text: string): string {
+  const stripped = text.replace(/\s*\[(?:P?\d+)\]/g, '')
+  return stripped
+    .trim()
+    .replace(/ {2,}/g, ' ')
+    .replace(/\s+([.,?!;:…。！？])/g, '$1')
+}
+
 export interface MappedClaim {
   idx: number
   text: string
@@ -259,7 +273,7 @@ export function mapSummaryClaims(
       seenPages.add(dbId)
       pageDbIds.push(dbId)
     }
-    return { idx, text: claim.text, segmentDbIds, pageDbIds }
+    return { idx, text: stripClaimCitationMarkers(claim.text), segmentDbIds, pageDbIds }
   })
 }
 

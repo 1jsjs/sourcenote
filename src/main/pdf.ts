@@ -25,10 +25,18 @@ export function textItemsToPageText(items: PdfTextItem[]): string {
   let out = ''
   for (const item of items) {
     out += item.str
-    out += item.hasEOL ? '\n' : ' '
+    if (item.hasEOL) {
+      out += '\n'
+    } else if (!/\s$/.test(out)) {
+      // The item already ends with whitespace: adding another space would
+      // double it (e.g. `Gradient  Descent` from pdf.js word spacing).
+      out += ' '
+    }
   }
   return out
     .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n[ \t]+/g, '\n')
+    .replace(/[ \t]{2,}/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
 }

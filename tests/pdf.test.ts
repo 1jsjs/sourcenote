@@ -63,6 +63,26 @@ describe('textItemsToPageText', () => {
     expect(textItemsToPageText([])).toBe('')
     expect(textItemsToPageText([{ str: '  띄움  ', hasEOL: false }])).toBe('띄움')
   })
+
+  it('does not double spaces when items already carry whitespace', () => {
+    expect(
+      textItemsToPageText([
+        { str: 'Gradient ', hasEOL: false },
+        { str: ' Descent ', hasEOL: false },
+        { str: '& ', hasEOL: false },
+        { str: ' Learning', hasEOL: false },
+      ]),
+    ).toBe('Gradient Descent & Learning')
+  })
+
+  it('keeps line breaks while collapsing space runs', () => {
+    expect(
+      textItemsToPageText([
+        { str: '첫 줄  ', hasEOL: true },
+        { str: '  둘째   줄', hasEOL: false },
+      ]),
+    ).toBe('첫 줄\n둘째 줄')
+  })
 })
 
 describe('extractPdfPages (real pdf.js in Node)', () => {

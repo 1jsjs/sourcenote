@@ -8,9 +8,18 @@ import { Readable } from 'node:stream'
 import './env'
 
 import { budgetCapUsd, LedgerStore } from './budget'
+import { runCheckPipeline } from './check-pipeline'
+import {
+  acceptAllCorrections,
+  acceptCorrection,
+  listCorrectionsDto,
+  rejectCorrection,
+  runCorrectionPipeline,
+} from './correction'
 import {
   createNote,
   createSource,
+  getLatestCheck,
   getLatestSummary,
   getSource,
   listNotePages,
@@ -25,7 +34,7 @@ import { ingestPdfSource } from './pdf'
 import { runAudioPipeline } from './pipeline'
 import { runSummaryPipeline } from './summary-pipeline'
 import { dbFilePath, ensureDataDir, ledgerFilePath, mediaDirPath } from './paths'
-import type { ProgressEvent, SummaryProgressEvent } from '../shared/types'
+import type { CorrectionProgressEvent, ProgressEvent, SummaryProgressEvent } from '../shared/types'
 
 // Must run before app ready so the scheme is treated as privileged.
 protocol.registerSchemesAsPrivileged([
@@ -126,6 +135,10 @@ function sendSummaryProgress(win: BrowserWindow | null, event: SummaryProgressEv
   win?.webContents.send('summary:progress', event)
 }
 
+function sendCorrectionProgress(win: BrowserWindow | null, event: CorrectionProgressEvent): void {
+  win?.webContents.send('correction:progress', event)
+}
+
 function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('notes:list', () => listNotes(db))
 
@@ -208,6 +221,50 @@ function registerIpc(getWindow: () => BrowserWindow | null): void {
       // Status/message already stored on the summary and sent via progress.
     })
   })
+
+  ipcMain.handle('corrections:run', (_e, noteId: unknown) => {
+    if (typeof noteId !== 'number') return
+    // Long-running: start in background; progress arrives via correction:progress.
+    void runCorrectionPipeline(
+      {
+        db,
+        metaApi,
+        onProgress: (event) => sendCorrectionProgress(getWindow(), event),
+      },
+      noteId,
+    ).catch(() => {
+      // Failure is reported via the error progress event.
+    })
+  })
+
+  ipcMain.handle('corrections:list', (_e, noteId: unknown) =>
+    typeof noteId === 'number' ? listCorrectionsDto(db, noteId) : [],
+  )
+
+  ipcMain.handle('corrections:accept', (_e, id: unknown) => {
+    if (typeof id !== 'number') throw new Error('교정 제안을 찾을 수 없습니다.')
+    return acceptCorrection(db, id)
+  })
+
+  ipcMain.handle('corrections:reject', (_e, id: unknown) => {
+    if (typeof id !== 'number') throw new Error('교정 제안을 찾을 수 없습니다.')
+    rejectCorrection(db, id)
+  })
+
+  ipcMain.handle('corrections:acceptAll', (_e, noteId: unknown) => {
+    if (typeof noteId !== 'number') throw new Error('노트를 찾을 수 없습니다.')
+    return acceptAllCorrections(db, noteId)
+  })
+
+  ipcMain.handle('check:run', (_e, noteId: unknown, text: unknown) => {
+    if (typeof noteId !== 'number') throw new Error('노트를 찾을 수 없습니다.')
+    if (typeof text !== 'string') throw new Error('검증할 문장이 없습니다.')
+    return runCheckPipeline({ db, metaApi }, noteId, text)
+  })
+
+  ipcMain.handle('check:getLatest', (_e, noteId: unknown) =>
+    typeof noteId === 'number' ? getLatestCheck(db, noteId) : null,
+  )
 
   ipcMain.handle('sources:addAudio', async (_e, noteId: unknown) => {
     if (typeof noteId !== 'number') return null

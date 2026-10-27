@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type {
+  CorrectionProgressEvent,
   NotePage,
   ProgressEvent,
   Source,
@@ -36,6 +37,22 @@ const api: SourcenoteApi = {
       ipcRenderer.removeListener('summary:progress', listener)
     }
   },
+  runCorrections: (noteId) => ipcRenderer.invoke('corrections:run', noteId),
+  listCorrections: (noteId) => ipcRenderer.invoke('corrections:list', noteId),
+  acceptCorrection: (id) => ipcRenderer.invoke('corrections:accept', id),
+  rejectCorrection: (id) => ipcRenderer.invoke('corrections:reject', id),
+  acceptAllCorrections: (noteId) => ipcRenderer.invoke('corrections:acceptAll', noteId),
+  onCorrectionProgress: (cb) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: CorrectionProgressEvent): void => {
+      cb(payload)
+    }
+    ipcRenderer.on('correction:progress', listener)
+    return () => {
+      ipcRenderer.removeListener('correction:progress', listener)
+    }
+  },
+  runCheck: (noteId, text) => ipcRenderer.invoke('check:run', noteId, text),
+  getLatestCheck: (noteId) => ipcRenderer.invoke('check:getLatest', noteId),
 }
 
 contextBridge.exposeInMainWorld('sourcenote', api)

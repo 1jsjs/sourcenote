@@ -31,6 +31,35 @@ export interface Segment {
   end_ms: number
   text: string
   chunk_index: number
+  /** Raw ASR text before the first accepted correction; null until then. */
+  original_text: string | null
+}
+
+export type CorrectionKind = 'term' | 'duplicate' | 'typo'
+
+export type CorrectionStatus = 'pending' | 'accepted' | 'rejected'
+
+export interface Correction {
+  id: number
+  noteId: number
+  segmentId: number
+  beforeText: string
+  afterText: string
+  reason: string
+  kind: CorrectionKind
+  status: CorrectionStatus
+  createdAt: string
+  /** Denormalized for the UI: segment start time and current text. */
+  startMs: number
+  segmentText: string
+  originalText: string | null
+}
+
+/** Sent over the `correction:progress` IPC channel. */
+export interface CorrectionProgressEvent {
+  noteId: number
+  stage: 'correcting' | 'done' | 'error'
+  message?: string
 }
 
 /** Sent over the `pipeline:progress` IPC channel. */
@@ -91,6 +120,8 @@ export interface Summary {
   status: SummaryStatus
   error: string | null
   createdAt: string
+  /** 'auto' = generated summary, 'check' = user-notes check. */
+  kind: 'auto' | 'check'
   claims: Claim[]
 }
 
@@ -120,4 +151,14 @@ export interface SourcenoteApi {
   runSummary(noteId: number): Promise<void>
   getLatestSummary(noteId: number): Promise<Summary | null>
   onSummaryProgress(cb: (event: SummaryProgressEvent) => void): () => void
+  /** Starts term-correction proposals in the background. */
+  runCorrections(noteId: number): Promise<void>
+  listCorrections(noteId: number): Promise<Correction[]>
+  acceptCorrection(id: number): Promise<{ message: string | null }>
+  rejectCorrection(id: number): Promise<void>
+  acceptAllCorrections(noteId: number): Promise<{ accepted: number }>
+  onCorrectionProgress(cb: (event: CorrectionProgressEvent) => void): () => void
+  /** Checks the user's own notes sentences against the lecture evidence. */
+  runCheck(noteId: number, text: string): Promise<Summary>
+  getLatestCheck(noteId: number): Promise<Summary | null>
 }

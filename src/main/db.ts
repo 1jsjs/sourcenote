@@ -95,6 +95,26 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (claim_id, page_id)
   );
   `,
+  // version 4: ASR term correction proposals (stage 4a)
+  `
+  ALTER TABLE segments ADD COLUMN original_text TEXT;
+  CREATE TABLE corrections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    note_id INTEGER NOT NULL REFERENCES notes(id),
+    segment_id INTEGER NOT NULL REFERENCES segments(id),
+    before_text TEXT NOT NULL,
+    after_text TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX idx_corrections_note ON corrections(note_id, status);
+  `,
+  // version 5: user-notes check stored as kind='check' summaries (stage 4b)
+  `
+  ALTER TABLE summaries ADD COLUMN kind TEXT NOT NULL DEFAULT 'auto';
+  `,
 ]
 
 export function openDb(filePath: string): DatabaseSync {
@@ -239,13 +259,21 @@ export interface SummaryRow {
   status: SummaryStatus
   error: string | null
   created_at: string
+  kind: string
 }
 
-export function createSummary(db: DatabaseSync, noteId: number, model: string): SummaryRow {
+export function createSummary(
+  db: DatabaseSync,
+  noteId: number,
+  model: string,
+  kind: 'auto' | 'check' = 'auto',
+): SummaryRow {
   const created = new Date().toISOString()
   const res = db
-    .prepare('INSERT INTO summaries (note_id, model, status, error, created_at) VALUES (?, ?, ?, ?, ?)')
-    .run(noteId, model, 'summarizing', null, created)
+    .prepare(
+      'INSERT INTO summaries (note_id, model, status, error, created_at, kind) VALUES (?, ?, ?, ?, ?, ?)',
+    )
+    .run(noteId, model, 'summarizing', null, created, kind)
   return {
     id: Number(res.lastInsertRowid),
     note_id: noteId,
@@ -253,6 +281,7 @@ export function createSummary(db: DatabaseSync, noteId: number, model: string): 
     status: 'summarizing',
     error: null,
     created_at: created,
+    kind,
   }
 }
 
@@ -396,11 +425,18 @@ export function listNotePages(db: DatabaseSync, noteId: number): NotePage[] {
   return rows
 }
 
-/** Latest summary of a note with claims and their cited segments, or null. */
-export function getLatestSummary(db: DatabaseSync, noteId: number): Summary | null {
+/**
+ * Latest summary of a note with claims and their cited segments, or null.
+ * `kind` selects 'auto' (generated summary) or 'check' (user-notes check).
+ */
+export function getLatestSummaryByKind(
+  db: DatabaseSync,
+  noteId: number,
+  kind: 'auto' | 'check',
+): Summary | null {
   const summary = db
-    .prepare('SELECT * FROM summaries WHERE note_id = ? ORDER BY id DESC LIMIT 1')
-    .get(noteId) as unknown as SummaryRow | null
+    .prepare('SELECT * FROM summaries WHERE note_id = ? AND kind = ? ORDER BY id DESC LIMIT 1')
+    .get(noteId, kind) as unknown as SummaryRow | null
   if (!summary) return null
 
   const claimRows = db
@@ -446,6 +482,102 @@ export function getLatestSummary(db: DatabaseSync, noteId: number): Summary | nu
     status: summary.status,
     error: summary.error,
     createdAt: summary.created_at,
+    kind: (summary.kind === 'check' ? 'check' : 'auto') as 'auto' | 'check',
     claims,
   }
+}
+
+/** Latest generated ('auto') summary of a note, or null. */
+export function getLatestSummary(db: DatabaseSync, noteId: number): Summary | null {
+  return getLatestSummaryByKind(db, noteId, 'auto')
+}
+
+/** Latest user-notes check ('check') of a note, or null. */
+export function getLatestCheck(db: DatabaseSync, noteId: number): Summary | null {
+  return getLatestSummaryByKind(db, noteId, 'check')
+}
+
+// ---------------------------------------------------------------------------
+// corrections (stage 4a: ASR term-correction proposals)
+// ---------------------------------------------------------------------------
+
+export interface CorrectionRow {
+  id: number
+  note_id: number
+  segment_id: number
+  before_text: string
+  after_text: string
+  reason: string
+  kind: string
+  status: string
+  created_at: string
+}
+
+export interface NewCorrection {
+  segmentId: number
+  beforeText: string
+  afterText: string
+  reason: string
+  kind: 'term' | 'duplicate' | 'typo'
+}
+
+/** Deletes pending corrections of a note (re-run replaces proposals, keeps history). */
+export function deletePendingCorrections(db: DatabaseSync, noteId: number): void {
+  db.prepare("DELETE FROM corrections WHERE note_id = ? AND status = 'pending'").run(noteId)
+}
+
+/** Inserts validated corrections as `pending` in one transaction. Returns ids in order. */
+export function insertCorrections(
+  db: DatabaseSync,
+  noteId: number,
+  corrections: NewCorrection[],
+): number[] {
+  const stmt = db.prepare(
+    'INSERT INTO corrections (note_id, segment_id, before_text, after_text, reason, kind, status, created_at) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+  )
+  const ids: number[] = []
+  db.exec('BEGIN')
+  try {
+    for (const c of corrections) {
+      const res = stmt.run(
+        noteId,
+        c.segmentId,
+        c.beforeText,
+        c.afterText,
+        c.reason,
+        c.kind,
+        'pending',
+        new Date().toISOString(),
+      )
+      ids.push(Number(res.lastInsertRowid))
+    }
+    db.exec('COMMIT')
+  } catch (err) {
+    db.exec('ROLLBACK')
+    throw err
+  }
+  return ids
+}
+
+/** All corrections of a note in id order (pending first, then the rest). */
+export function listCorrections(db: DatabaseSync, noteId: number): CorrectionRow[] {
+  return db
+    .prepare(
+      "SELECT * FROM corrections WHERE note_id = ? ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, id",
+    )
+    .all(noteId) as unknown as CorrectionRow[]
+}
+
+export function getCorrection(db: DatabaseSync, id: number): CorrectionRow | null {
+  const row = db.prepare('SELECT * FROM corrections WHERE id = ?').get(id)
+  return (row as unknown as CorrectionRow) ?? null
+}
+
+export function setCorrectionStatus(
+  db: DatabaseSync,
+  id: number,
+  status: 'accepted' | 'rejected',
+): void {
+  db.prepare('UPDATE corrections SET status = ? WHERE id = ?').run(status, id)
 }

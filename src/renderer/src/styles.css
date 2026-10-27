@@ -390,3 +390,62 @@ button.seg-time:hover {
   gap: 8px;
   margin-top: 10px;
 }
+
+.correction-before {
+  text-decoration: line-through;
+  color: #b3261e;
+}
+
+.correction-after {
+  color: #1c7c34;
+  font-weight: 600;
+}
+
+.correction-kind {
+  font-size: 11px;
+  border-radius: 10px;
+  padding: 1px 8px;
+  background: #f0f0f2;
+  color: #555;
+  white-space: nowrap;
+}
+
+.correction-reason {
+  font-size: 12px;
+  color: #555;
+}
+
+.corrected-mark {
+  font-size: 11px;
+  border-radius: 10px;
+  padding: 1px 8px;
+  background: #e8f0fe;
+  color: #1a56db;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.accept-all {
+  margin-left: 8px;
+}
+
+.section-title {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.check-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #d0d0d4;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.check-actions {
+  margin: 8px 0;
+}

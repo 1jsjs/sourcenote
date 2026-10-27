@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
+  Claim,
+  Correction,
+  CorrectionProgressEvent,
   Note,
   NotePage,
   ProgressEvent,
@@ -11,6 +14,59 @@ import type {
 } from '../../shared/types'
 import AudioPlayer from './AudioPlayer'
 import SlidePanel from './SlidePanel'
+
+const CORRECTION_KIND_LABEL: Record<Correction['kind'], string> = {
+  term: '용어',
+  duplicate: '중복',
+  typo: '오타',
+}
+
+function ClaimList({
+  claims,
+  onCiteSegment,
+  onCitePage,
+}: {
+  claims: Claim[]
+  onCiteSegment: (sourceId: number, segmentId: number, startMs: number) => void
+  onCitePage: (sourceId: number, pageNo: number, displayName: string) => void
+}) {
+  return (
+    <ul className="claims">
+      {claims.map((claim) => (
+        <li
+          key={claim.id}
+          className={claim.verdict === 'unsupported' ? 'claim claim-unsupported' : 'claim'}
+        >
+          <span className="claim-text">{claim.text}</span>{' '}
+          {claim.verdict === 'unsupported' && <span className="badge-unsupported">자료에 없음</span>}{' '}
+          {claim.citations.map((cite) => (
+            <button
+              key={cite.segmentId}
+              className="cite-chip"
+              title={cite.text}
+              onClick={() => onCiteSegment(cite.sourceId, cite.segmentId, cite.startMs)}
+            >
+              {formatHms(cite.startMs)}
+            </button>
+          ))}
+          {claim.pageCitations.map((cite) => (
+            <button
+              key={cite.pageId}
+              className="page-chip"
+              title={cite.text}
+              onClick={() => onCitePage(cite.sourceId, cite.pageNo, cite.sourceDisplayName)}
+            >
+              p.{cite.pageNo}
+            </button>
+          ))}
+          {claim.verdict === 'unsupported' && claim.reason !== null && (
+            <div className="claim-reason">{claim.reason}</div>
+          )}
+        </li>
+      ))}
+    </ul>
+  )
+}
 
 const STATUS_LABEL: Record<SourceStatus, string> = {
   pending: '대기',
@@ -41,6 +97,12 @@ export default function App() {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [summaryRunning, setSummaryRunning] = useState(false)
   const [summaryStage, setSummaryStage] = useState<SummaryProgressEvent['stage'] | null>(null)
+  const [corrections, setCorrections] = useState<Correction[]>([])
+  const [correctionsRunning, setCorrectionsRunning] = useState(false)
+  const [correctionStage, setCorrectionStage] = useState<CorrectionProgressEvent['stage'] | null>(null)
+  const [checkText, setCheckText] = useState('')
+  const [checkResult, setCheckResult] = useState<Summary | null>(null)
+  const [checkRunning, setCheckRunning] = useState(false)
   const [highlightedSegmentId, setHighlightedSegmentId] = useState<number | null>(null)
   const [pages, setPages] = useState<NotePage[]>([])
   const [playerSourceId, setPlayerSourceId] = useState<number | null>(null)
@@ -85,14 +147,27 @@ export default function App() {
     setSummary(await window.sourcenote.getLatestSummary(noteId))
   }, [])
 
+  const refreshCorrections = useCallback(async (noteId: number) => {
+    setCorrections(await window.sourcenote.listCorrections(noteId))
+  }, [])
+
+  const refreshCheck = useCallback(async (noteId: number) => {
+    setCheckResult(await window.sourcenote.getLatestCheck(noteId))
+  }, [])
+
   useEffect(() => {
     if (selectedNoteId !== null) {
       void refreshSources(selectedNoteId)
       void refreshSummary(selectedNoteId)
+      void refreshCorrections(selectedNoteId)
+      void refreshCheck(selectedNoteId)
     } else {
       setSources([])
       setSegmentsBySource({})
       setSummary(null)
+      setCorrections([])
+      setCheckResult(null)
+      setCheckText('')
       setPages([])
       setPlayerSourceId(null)
       setActiveSegmentId(null)
@@ -100,7 +175,10 @@ export default function App() {
     }
     setSummaryRunning(false)
     setSummaryStage(null)
-  }, [selectedNoteId, refreshSources, refreshSummary])
+    setCorrectionsRunning(false)
+    setCorrectionStage(null)
+    setCheckRunning(false)
+  }, [selectedNoteId, refreshSources, refreshSummary, refreshCorrections, refreshCheck])
 
   useEffect(() => {
     const unsubscribe = window.sourcenote.onProgress((event) => {
@@ -127,6 +205,20 @@ export default function App() {
     })
     return unsubscribe
   }, [selectedNoteId, refreshSummary, refreshSpend])
+
+  useEffect(() => {
+    const unsubscribe = window.sourcenote.onCorrectionProgress((event) => {
+      if (event.noteId !== selectedNoteId) return
+      setCorrectionStage(event.stage)
+      if (event.stage === 'done' || event.stage === 'error') {
+        setCorrectionsRunning(false)
+        if (event.stage === 'error' && event.message) setError(event.message)
+        void refreshCorrections(event.noteId)
+        void refreshSpend()
+      }
+    })
+    return unsubscribe
+  }, [selectedNoteId, refreshCorrections, refreshSpend])
 
   useEffect(
     () => () => {
@@ -185,6 +277,74 @@ export default function App() {
     }
   }
 
+  const handleRunCorrections = async (): Promise<void> => {
+    if (selectedNoteId === null) return
+    setError(null)
+    setCorrectionsRunning(true)
+    setCorrectionStage('correcting')
+    try {
+      await window.sourcenote.runCorrections(selectedNoteId)
+    } catch (err) {
+      setCorrectionsRunning(false)
+      setCorrectionStage(null)
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const refreshAfterCorrectionChange = async (noteId: number): Promise<void> => {
+    await refreshCorrections(noteId)
+    await refreshSources(noteId)
+  }
+
+  const handleAcceptCorrection = async (id: number): Promise<void> => {
+    if (selectedNoteId === null) return
+    setError(null)
+    try {
+      const { message } = await window.sourcenote.acceptCorrection(id)
+      if (message !== null) setError(message)
+      await refreshAfterCorrectionChange(selectedNoteId)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const handleRejectCorrection = async (id: number): Promise<void> => {
+    if (selectedNoteId === null) return
+    setError(null)
+    try {
+      await window.sourcenote.rejectCorrection(id)
+      await refreshCorrections(selectedNoteId)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const handleAcceptAllCorrections = async (): Promise<void> => {
+    if (selectedNoteId === null) return
+    setError(null)
+    try {
+      await window.sourcenote.acceptAllCorrections(selectedNoteId)
+      await refreshAfterCorrectionChange(selectedNoteId)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const handleRunCheck = async (): Promise<void> => {
+    if (selectedNoteId === null || checkText.trim().length === 0) return
+    setError(null)
+    setCheckRunning(true)
+    try {
+      const result = await window.sourcenote.runCheck(selectedNoteId, checkText)
+      setCheckResult(result)
+      await refreshSpend()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setCheckRunning(false)
+    }
+  }
+
   const highlightSegment = (segmentId: number): void => {
     const element = document.getElementById(`segment-${segmentId}`)
     if (element) {
@@ -201,6 +361,14 @@ export default function App() {
     setPlayerStartMs(startMs)
     setPlayToken((t) => t + 1)
   }, [])
+
+  /** Finds which source a segment belongs to (correction chips only carry segmentId). */
+  const sourceIdOfSegment = (segmentId: number): number | null => {
+    for (const [sourceId, segments] of Object.entries(segmentsBySource)) {
+      if (segments.some((s) => s.id === segmentId)) return Number(sourceId)
+    }
+    return null
+  }
 
   const handleCiteClick = (sourceId: number, segmentId: number, startMs: number): void => {
     playSegment(sourceId, startMs)
@@ -290,9 +458,24 @@ export default function App() {
                 >
                   근거 요약 만들기
                 </button>
+                <button
+                  onClick={() => void handleRunCorrections()}
+                  disabled={
+                    correctionsRunning ||
+                    !sources.some((s) => s.kind === 'audio' && s.status === 'done')
+                  }
+                  title="전사 오류(용어·중복·오타) 수정 제안"
+                >
+                  용어 교정 제안
+                </button>
                 {summaryRunning && (
                   <span className="summary-progress">
                     {summaryStage === 'verifying' ? '검증 중…' : '요약 중…'}
+                  </span>
+                )}
+                {correctionsRunning && (
+                  <span className="summary-progress">
+                    {correctionStage === 'done' ? '완료' : '교정 제안 생성 중…'}
                   </span>
                 )}
               </div>
@@ -303,54 +486,97 @@ export default function App() {
                     {summary.claims.filter((c) => c.verdict === 'supported').length} · 자료에
                     없음 {summary.claims.filter((c) => c.verdict === 'unsupported').length}
                   </div>
-                  <ul className="claims">
-                    {summary.claims.map((claim) => (
-                      <li
-                        key={claim.id}
-                        className={
-                          claim.verdict === 'unsupported' ? 'claim claim-unsupported' : 'claim'
-                        }
+                  <ClaimList
+                    claims={summary.claims}
+                    onCiteSegment={handleCiteClick}
+                    onCitePage={(sourceId, pageNo, displayName) =>
+                      setSlideSel({ sourceId, pageNo, displayName })
+                    }
+                  />
+                </section>
+              )}
+              {corrections.length > 0 && (
+                <section className="summary corrections">
+                  <div className="summary-counts">
+                    교정 제안 {corrections.filter((c) => c.status === 'pending').length} · 수락됨{' '}
+                    {corrections.filter((c) => c.status === 'accepted').length} · 거절됨{' '}
+                    {corrections.filter((c) => c.status === 'rejected').length}{' '}
+                    {corrections.some((c) => c.status === 'pending') && (
+                      <button
+                        className="accept-all"
+                        onClick={() => void handleAcceptAllCorrections()}
                       >
-                        <span className="claim-text">{claim.text}</span>{' '}
-                        {claim.verdict === 'unsupported' && (
-                          <span className="badge-unsupported">자료에 없음</span>
-                        )}{' '}
-                        {claim.citations.map((cite) => (
+                        모두 수락
+                      </button>
+                    )}
+                  </div>
+                  <ul className="claims">
+                    {corrections
+                      .filter((c) => c.status === 'pending')
+                      .map((c) => (
+                        <li key={c.id} className="claim">
                           <button
-                            key={cite.segmentId}
                             className="cite-chip"
-                            title={cite.text}
-                            onClick={() =>
-                              handleCiteClick(cite.sourceId, cite.segmentId, cite.startMs)
-                            }
+                            title="이 위치부터 재생"
+                            onClick={() => {
+                              const sourceId = sourceIdOfSegment(c.segmentId)
+                              if (sourceId !== null) {
+                                playSegment(sourceId, c.startMs)
+                                highlightSegment(c.segmentId)
+                              }
+                            }}
                           >
-                            {formatHms(cite.startMs)}
-                          </button>
-                        ))}
-                        {claim.pageCitations.map((cite) => (
-                          <button
-                            key={cite.pageId}
-                            className="page-chip"
-                            title={cite.text}
-                            onClick={() =>
-                              setSlideSel({
-                                sourceId: cite.sourceId,
-                                pageNo: cite.pageNo,
-                                displayName: cite.sourceDisplayName,
-                              })
-                            }
-                          >
-                            p.{cite.pageNo}
-                          </button>
-                        ))}
-                        {claim.verdict === 'unsupported' && claim.reason !== null && (
-                          <div className="claim-reason">{claim.reason}</div>
-                        )}
-                      </li>
-                    ))}
+                            {formatHms(c.startMs)}
+                          </button>{' '}
+                          <span className="correction-before">{c.beforeText}</span>
+                          {' → '}
+                          <span className="correction-after">{c.afterText}</span>{' '}
+                          <span className="correction-kind">
+                            {CORRECTION_KIND_LABEL[c.kind]}
+                          </span>{' '}
+                          <span className="correction-reason">{c.reason}</span>{' '}
+                          <button onClick={() => void handleAcceptCorrection(c.id)}>수락</button>{' '}
+                          <button onClick={() => void handleRejectCorrection(c.id)}>거절</button>
+                        </li>
+                      ))}
                   </ul>
                 </section>
               )}
+              <section className="summary check-notes">
+                <h3 className="section-title">내 필기 검증</h3>
+                <textarea
+                  className="check-input"
+                  value={checkText}
+                  placeholder="강의를 듣고 적은 내용을 붙여 넣으세요. 문장마다 강의 근거를 찾아 맞는지 확인합니다."
+                  onChange={(e) => setCheckText(e.target.value)}
+                  rows={4}
+                />
+                <div className="check-actions">
+                  <button
+                    onClick={() => void handleRunCheck()}
+                    disabled={checkRunning || checkText.trim().length === 0}
+                  >
+                    {checkRunning ? '검증 중…' : '검증하기'}
+                  </button>
+                </div>
+                {checkResult !== null && checkResult.claims.length > 0 && (
+                  <>
+                    <div className="summary-counts">
+                      검증됨{' '}
+                      {checkResult.claims.filter((c) => c.verdict === 'supported').length} ·
+                      자료에 없음{' '}
+                      {checkResult.claims.filter((c) => c.verdict === 'unsupported').length}
+                    </div>
+                    <ClaimList
+                      claims={checkResult.claims}
+                      onCiteSegment={handleCiteClick}
+                      onCitePage={(sourceId, pageNo, displayName) =>
+                        setSlideSel({ sourceId, pageNo, displayName })
+                      }
+                    />
+                  </>
+                )}
+              </section>
               {sources.length === 0 && <p className="empty">추가된 자료가 없습니다.</p>}
               {sources.map((source) => {
                 const progress = progressBySource[source.id]
@@ -394,6 +620,11 @@ export default function App() {
                             >
                               [{formatHms(seg.start_ms)}–{formatHms(seg.end_ms)}]
                             </button>{' '}
+                            {seg.original_text !== null && (
+                              <span className="corrected-mark" title={`원문: ${seg.original_text}`}>
+                                교정됨
+                              </span>
+                            )}{' '}
                             {seg.text}
                           </li>
                         ))}

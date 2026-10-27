@@ -31,9 +31,9 @@ describe('db (node:sqlite)', () => {
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
-  it('creates schema and reports user_version 3', () => {
+  it('creates schema and reports user_version 5', () => {
     const row = db.prepare('PRAGMA user_version').get() as { user_version: number }
-    expect(row.user_version).toBe(3)
+    expect(row.user_version).toBe(5)
   })
 
   it('reopening the same file is idempotent (no duplicate schema errors)', () => {
