@@ -1,0 +1,10 @@
+Today we're going to talk about gradient descent.
+The model moves its weights a little at a time in the direction that lowers the loss function.
+How far it moves in one step is set by the learning rate.
+If the learning rate is too large, the update overshoots the minimum and the loss can actually diverge.
+If it is too small, training becomes very slow and may not converge within the epochs you have.
+Instead of using the whole dataset at once, we can compute the gradient on a small batch of examples. This is called stochastic gradient descent.
+With mini-batches each update is fast, and the small amount of noise in the gradient can even help the model escape shallow local minima.
+In practice, people often start with a large learning rate and shrink it over time. This is called learning rate scheduling.
+Two common schedules are step decay, which halves the learning rate every few epochs, and cosine annealing, which lowers it along a cosine curve.
+Next time we'll cover momentum and the Adam optimizer.

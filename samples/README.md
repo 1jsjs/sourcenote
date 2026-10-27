@@ -9,6 +9,8 @@ Everything here was written for Sourcenote during the hackathon and may be reuse
 | `demo-lecture.m4a` | macOS text-to-speech (voice: Yuna) of the script, 1.6 s pause between paragraphs (84 s) |
 | `demo-slides.pdf` | 4 slides with the English terms; slide 4 adds *Warmup*, which the lecture never says |
 | `demo-slides.html` | Source of the slides (printed to PDF with headless Chrome) |
+| `lecture-script-en.txt`, `demo-slides-en.html` | English version (voice: Samantha, 71 s) |
+| `notes/ko-gradient-descent/`, `notes/en-gradient-descent/` | Ready-made sample notes (`sample-note/v1`): transcript, slides, accepted corrections, cited summary and a notes check, produced by the real pipeline with Muse Voice Transcribe and Muse Spark. The app opens them without an API key (**Open sample note**). |
 
 ## Try it from the command line
 
