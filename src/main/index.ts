@@ -40,7 +40,7 @@ import type { CorrectionProgressEvent, ProgressEvent, SummaryProgressEvent } fro
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'sourcenote-media',
-    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
+    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },
   },
 ])
 
@@ -51,6 +51,12 @@ const AUDIO_FILTERS = [
 ]
 
 const PDF_FILTERS = [{ name: 'PDF', extensions: ['pdf'] }]
+
+// The renderer page (file:// in production, http://localhost in dev) fetches
+// slides from this scheme for pdf.js, which is a cross-origin request. The
+// scheme only serves files registered as sources, so allowing any origin
+// grants nothing beyond what the app's own window can already load.
+const CORS_HEADERS = { 'Access-Control-Allow-Origin': '*' }
 
 /**
  * Serves `sourcenote-media://source/<id>` from the source's stored file.
@@ -85,6 +91,7 @@ async function handleMediaRequest(req: Request): Promise<Response> {
         'Content-Type': contentType,
         'Content-Length': String(size),
         'Accept-Ranges': 'bytes',
+        ...CORS_HEADERS,
       },
     })
   }
@@ -98,13 +105,14 @@ async function handleMediaRequest(req: Request): Promise<Response> {
         'Content-Type': contentType,
         'Content-Length': String(size),
         'Accept-Ranges': 'bytes',
+        ...CORS_HEADERS,
       },
     })
   }
   if (parsed === 'unsatisfiable') {
     return new Response('요청 범위를 만족할 수 없음', {
       status: 416,
-      headers: { 'Content-Range': `bytes */${size}` },
+      headers: { 'Content-Range': `bytes */${size}`, ...CORS_HEADERS },
     })
   }
   const stream = fs.createReadStream(source.original_path, {
@@ -118,6 +126,7 @@ async function handleMediaRequest(req: Request): Promise<Response> {
       'Content-Length': String(parsed.end - parsed.start + 1),
       'Content-Range': `bytes ${parsed.start}-${parsed.end}/${size}`,
       'Accept-Ranges': 'bytes',
+        ...CORS_HEADERS,
     },
   })
 }

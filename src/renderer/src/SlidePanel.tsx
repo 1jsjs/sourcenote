@@ -31,8 +31,15 @@ export default function SlidePanel({
     let cancelled = false
     setLoading(true)
     setError(null)
-    getDocument(`sourcenote-media://source/${sourceId}`)
-      .promise.then(async (doc) => {
+    // pdf.js 6 only accepts { url | data | range }; fetch the bytes through the
+    // media protocol ourselves so no custom-scheme loader is involved.
+    fetch(`sourcenote-media://source/${sourceId}`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return res.arrayBuffer()
+      })
+      .then((buf) => getDocument({ data: new Uint8Array(buf) }).promise)
+      .then(async (doc) => {
         if (cancelled) return
         const page = await doc.getPage(pageNo)
         if (cancelled) return
@@ -41,9 +48,13 @@ export default function SlidePanel({
         // Fit to the panel width.
         const width = 360
         const base = page.getViewport({ scale: 1 })
-        const viewport = page.getViewport({ scale: width / base.width })
+        // Render at device pixel ratio so slide text stays sharp on Retina.
+        const dpr = window.devicePixelRatio || 1
+        const viewport = page.getViewport({ scale: (width / base.width) * dpr })
         canvas.width = Math.floor(viewport.width)
         canvas.height = Math.floor(viewport.height)
+        canvas.style.width = `${width}px`
+        canvas.style.height = `${Math.floor(viewport.height / dpr)}px`
         const ctx = canvas.getContext('2d')
         if (!ctx) {
           if (!cancelled) {
@@ -52,10 +63,11 @@ export default function SlidePanel({
           }
           return
         }
-        await page.render({ canvasContext: ctx, viewport }).promise
+        await page.render({ canvas, canvasContext: ctx, viewport }).promise
         if (!cancelled) setLoading(false)
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        console.error('slide load failed', err)
         if (!cancelled) {
           setError('슬라이드를 불러오지 못했습니다.')
           setLoading(false)

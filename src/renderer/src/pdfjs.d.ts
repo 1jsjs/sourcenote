@@ -10,7 +10,11 @@ declare module 'pdfjs-dist/build/pdf.mjs' {
   }
   export interface PdfPage {
     getViewport(params: { scale: number }): PdfViewport
-    render(params: { canvasContext: CanvasRenderingContext2D; viewport: PdfViewport }): {
+    render(params: {
+      canvas: HTMLCanvasElement
+      canvasContext: CanvasRenderingContext2D
+      viewport: PdfViewport
+    }): {
       promise: Promise<void>
     }
   }
@@ -19,7 +23,7 @@ declare module 'pdfjs-dist/build/pdf.mjs' {
     getPage(pageNo: number): Promise<PdfPage>
   }
   export const GlobalWorkerOptions: { workerSrc: string }
-  export function getDocument(src: string): { promise: Promise<PdfDocument> }
+  export function getDocument(src: { data: Uint8Array }): { promise: Promise<PdfDocument> }
 }
 
 declare module 'pdfjs-dist/build/pdf.worker.min.mjs?url' {
