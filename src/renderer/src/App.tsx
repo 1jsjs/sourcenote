@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type {
   AppLanguage,
   Claim,
@@ -31,41 +31,78 @@ function ClaimList({
 }) {
   return (
     <ul className="claims">
-      {claims.map((claim) => (
-        <li
-          key={claim.id}
-          className={claim.verdict === 'unsupported' ? 'claim claim-unsupported' : 'claim'}
-        >
-          <span className="claim-text">{claim.text}</span>{' '}
-          {claim.verdict === 'unsupported' && (
-            <span className="badge-unsupported">{t(lang, 'notInSources')}</span>
-          )}{' '}
-          {claim.citations.map((cite) => (
-            <button
-              key={cite.segmentId}
-              className="cite-chip"
-              title={cite.text}
-              onClick={() => onCiteSegment(cite.sourceId, cite.segmentId, cite.startMs)}
-            >
-              {formatHms(cite.startMs)}
-            </button>
-          ))}
-          {claim.pageCitations.map((cite) => (
-            <button
-              key={cite.pageId}
-              className="page-chip"
-              title={cite.text}
-              onClick={() => onCitePage(cite.sourceId, cite.pageNo, cite.sourceDisplayName)}
-            >
-              p.{cite.pageNo}
-            </button>
-          ))}
-          {claim.verdict === 'unsupported' && claim.reason !== null && (
-            <div className="claim-reason">{claim.reason}</div>
-          )}
-        </li>
-      ))}
+      {claims.map((claim) => {
+        const unsupported = claim.verdict === 'unsupported'
+        const pending = claim.verdict === 'pending'
+        return (
+          <li key={claim.id} className="claim">
+            <span className="gutter" aria-hidden="true">
+              {!pending &&
+                (unsupported ? (
+                  <span className="mark-no">✕</span>
+                ) : (
+                  <span className="mark-ok">✓</span>
+                ))}
+            </span>
+            <div className="claim-body">
+              <span
+                className={
+                  unsupported
+                    ? 'claim-text claim-text-unsupported'
+                    : pending
+                      ? 'claim-text claim-pending'
+                      : 'claim-text'
+                }
+              >
+                {claim.text}
+              </span>
+              {unsupported && (
+                <span className="badge-unsupported">{t(lang, 'notInSources')}</span>
+              )}
+              {(claim.citations.length > 0 || claim.pageCitations.length > 0) && (
+                <div className="chips">
+                  {claim.citations.map((cite) => (
+                    <button
+                      key={cite.segmentId}
+                      className="cite-chip"
+                      title={cite.text}
+                      onClick={() => onCiteSegment(cite.sourceId, cite.segmentId, cite.startMs)}
+                    >
+                      {formatHms(cite.startMs)}
+                    </button>
+                  ))}
+                  {claim.pageCitations.map((cite) => (
+                    <button
+                      key={cite.pageId}
+                      className="page-chip"
+                      title={cite.text}
+                      onClick={() => onCitePage(cite.sourceId, cite.pageNo, cite.sourceDisplayName)}
+                    >
+                      p.{cite.pageNo}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {unsupported && claim.reason !== null && (
+                <div className="claim-reason">{claim.reason}</div>
+              )}
+            </div>
+          </li>
+        )
+      })}
     </ul>
+  )
+}
+
+/** Running-progress text with a CSS-only animated ellipsis. */
+function ProgressText({ text }: { text: string }) {
+  const stripped = text.replace(/…+$/u, '').replace(/\s*\.+$/, '')
+  if (stripped === text) return <>{text}</>
+  return (
+    <>
+      {stripped}
+      <span className="ellipsis" aria-hidden="true" />
+    </>
   )
 }
 
@@ -86,6 +123,10 @@ function formatHms(ms: number): string {
   return `${pad(h)}:${pad(m)}:${pad(s)}`
 }
 
+const IS_MAC =
+  typeof navigator !== 'undefined' &&
+  (/Mac/.test(navigator.platform) || /Macintosh/.test(navigator.userAgent))
+
 export default function App() {
   const [lang, setLang] = useState<AppLanguage>('ko')
   const [notes, setNotes] = useState<Note[]>([])
@@ -102,6 +143,7 @@ export default function App() {
   const [corrections, setCorrections] = useState<Correction[]>([])
   const [correctionsRunning, setCorrectionsRunning] = useState(false)
   const [correctionStage, setCorrectionStage] = useState<CorrectionProgressEvent['stage'] | null>(null)
+  const [correctionsOpen, setCorrectionsOpen] = useState(true)
   const [checkText, setCheckText] = useState('')
   const [checkResult, setCheckResult] = useState<Summary | null>(null)
   const [checkRunning, setCheckRunning] = useState(false)
@@ -119,6 +161,7 @@ export default function App() {
   const [renameText, setRenameText] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<Note | null>(null)
   const renameDone = useRef(false)
+  const [rightTab, setRightTab] = useState<'transcript' | 'slides'>('transcript')
   const [slideSel, setSlideSel] = useState<{
     sourceId: number
     pageNo: number
@@ -138,19 +181,16 @@ export default function App() {
     setSamples(await window.sourcenote.listSamples())
   }, [])
 
-  const refreshSources = useCallback(
-    async (noteId: number) => {
-      const list = await window.sourcenote.listSources(noteId)
-      setSources(list)
-      const done = list.filter((s) => s.status === 'done')
-      const entries = await Promise.all(
-        done.map(async (s) => [s.id, await window.sourcenote.listSegments(s.id)] as const),
-      )
-      setSegmentsBySource(Object.fromEntries(entries))
-      setPages(await window.sourcenote.listPages(noteId))
-    },
-    [],
-  )
+  const refreshSources = useCallback(async (noteId: number) => {
+    const list = await window.sourcenote.listSources(noteId)
+    setSources(list)
+    const done = list.filter((s) => s.status === 'done')
+    const entries = await Promise.all(
+      done.map(async (s) => [s.id, await window.sourcenote.listSegments(s.id)] as const),
+    )
+    setSegmentsBySource(Object.fromEntries(entries))
+    setPages(await window.sourcenote.listPages(noteId))
+  }, [])
 
   useEffect(() => {
     void window.sourcenote.getSettings().then((s) => setLang(s.language))
@@ -215,6 +255,7 @@ export default function App() {
       setPlayerSourceId(null)
       setActiveSegmentId(null)
       setSlideSel(null)
+      setRightTab('transcript')
     }
     setSummaryRunning(false)
     setSummaryStage(null)
@@ -435,20 +476,23 @@ export default function App() {
   }
 
   const highlightSegment = (segmentId: number): void => {
-    const element = document.getElementById(`segment-${segmentId}`)
-    if (element) {
-      element.scrollIntoView({ block: 'center' })
-      setHighlightedSegmentId(segmentId)
-      if (highlightTimer.current !== null) clearTimeout(highlightTimer.current)
-      highlightTimer.current = setTimeout(() => setHighlightedSegmentId(null), 2000)
-    }
+    // The transcript lives in the right pane; scroll the row to the center.
+    requestAnimationFrame(() => {
+      const element = document.getElementById(`segment-${segmentId}`)
+      if (element) {
+        element.scrollIntoView({ block: 'center' })
+        setHighlightedSegmentId(segmentId)
+        if (highlightTimer.current !== null) clearTimeout(highlightTimer.current)
+        highlightTimer.current = setTimeout(() => setHighlightedSegmentId(null), 2000)
+      }
+    })
   }
 
   /** Switches the player to the segment's source if needed, seeks and plays. */
   const playSegment = useCallback((sourceId: number, startMs: number): void => {
     setPlayerSourceId(sourceId)
     setPlayerStartMs(startMs)
-    setPlayToken((t) => t + 1)
+    setPlayToken((tok) => tok + 1)
   }, [])
 
   /** Finds which source a segment belongs to (correction chips only carry segmentId). */
@@ -460,6 +504,7 @@ export default function App() {
   }
 
   const handleCiteClick = (sourceId: number, segmentId: number, startMs: number): void => {
+    setRightTab('transcript')
     playSegment(sourceId, startMs)
     highlightSegment(segmentId)
   }
@@ -467,6 +512,11 @@ export default function App() {
   const handleTimestampClick = (sourceId: number, segmentId: number, startMs: number): void => {
     playSegment(sourceId, startMs)
     highlightSegment(segmentId)
+  }
+
+  const handlePageCiteClick = (sourceId: number, pageNo: number, displayName: string): void => {
+    setSlideSel({ sourceId, pageNo, displayName })
+    setRightTab('slides')
   }
 
   const handlePlayerTime = useCallback(
@@ -479,6 +529,8 @@ export default function App() {
   )
 
   const doneAudioSources = sources.filter((s) => s.kind === 'audio' && s.status === 'done')
+  const audioSources = sources.filter((s) => s.kind === 'audio')
+  const pdfDoneSources = sources.filter((s) => s.kind === 'pdf' && s.status === 'done')
   const playerSource =
     doneAudioSources.find((s) => s.id === playerSourceId) ?? doneAudioSources[0] ?? null
   const pageCountBySource = new Map<number, number>()
@@ -491,6 +543,21 @@ export default function App() {
     duplicate: t(lang, 'kindDuplicate'),
     typo: t(lang, 'kindTypo'),
   }
+  const selectedNote = notes.find((n) => n.id === selectedNoteId) ?? null
+  const transcriptRowCount = audioSources.reduce(
+    (n, s) => n + (segmentsBySource[s.id]?.length ?? 0),
+    0,
+  )
+  const effectiveSlide =
+    slideSel !== null && pdfDoneSources.some((s) => s.id === slideSel.sourceId)
+      ? slideSel
+      : pdfDoneSources.length > 0
+        ? {
+            sourceId: pdfDoneSources[0].id,
+            pageNo: 1,
+            displayName: pdfDoneSources[0].display_name,
+          }
+        : null
 
   const sampleList = (
     <ul className="sample-list">
@@ -505,10 +572,172 @@ export default function App() {
     </ul>
   )
 
+  const sourcePill = (source: Source): ReactNode => {
+    const progress = progressBySource[source.id]
+    const isAudio = source.kind === 'audio'
+    const meta = isAudio
+      ? source.duration_ms !== null
+        ? formatHms(source.duration_ms)
+        : null
+      : source.status === 'done'
+        ? t(lang, 'slidesLabel', { count: pageCountBySource.get(source.id) ?? 0 })
+        : null
+    const transcribing =
+      (source.status === 'transcribing' || source.status === 'converting') &&
+      progress &&
+      progress.totalChunks > 0
+    return (
+      <span
+        key={source.id}
+        className="source-pill"
+        title={
+          source.status === 'error' && source.error !== null
+            ? source.error
+            : source.display_name
+        }
+      >
+        <span className={isAudio ? 'kind-label audio' : 'kind-label pdf'}>
+          {isAudio ? t(lang, 'audioLabel') : t(lang, 'pdfLabel')}
+        </span>
+        <span className="pill-name">{source.display_name}</span>
+        {meta !== null && <span className="pill-meta">{meta}</span>}
+        <span
+          className={
+            source.status === 'done'
+              ? 'pill-status done'
+              : source.status === 'error'
+                ? 'pill-status error'
+                : 'pill-status busy'
+          }
+        >
+          {transcribing
+            ? t(lang, 'transcribingProgress', {
+                done: progress.chunk,
+                total: progress.totalChunks,
+              })
+            : t(lang, STATUS_KEY[source.status])}
+        </span>
+        {transcribing && (
+          <span className="pill-progress" aria-hidden="true">
+            <span style={{ width: `${Math.min(100, (progress.chunk / progress.totalChunks) * 100)}%` }} />
+          </span>
+        )}
+      </span>
+    )
+  }
+
+  const countLine = (claims: Claim[]): ReactNode => (
+    <p className="counts-line">
+      <span className="dot dot-ok" aria-hidden="true">
+        ●
+      </span>{' '}
+      {t(lang, 'verifiedCount')} {claims.filter((c) => c.verdict === 'supported').length} ·{' '}
+      <span className="dot dot-no" aria-hidden="true">
+        ●
+      </span>{' '}
+      {t(lang, 'notInSources')} {claims.filter((c) => c.verdict === 'unsupported').length}
+    </p>
+  )
+
+  const transcriptView = (
+    <>
+      {audioSources.length === 0 || transcriptRowCount === 0 ? (
+        <p className="empty">{t(lang, 'noTranscript')}</p>
+      ) : (
+        audioSources.map((source) => {
+          const segments = segmentsBySource[source.id] ?? []
+          if (segments.length === 0) return null
+          return (
+            <div key={source.id}>
+              {audioSources.length > 1 && (
+                <p className="seg-group-label">{source.display_name}</p>
+              )}
+              <ul className="segments">
+                {segments.map((seg) => (
+                  <li
+                    key={seg.id}
+                    id={`segment-${seg.id}`}
+                    data-segment-id={seg.id}
+                    className={seg.id === shownSegmentId ? 'highlight' : undefined}
+                  >
+                    <button
+                      className="seg-time"
+                      title={t(lang, 'playFromHere')}
+                      onClick={() => handleTimestampClick(source.id, seg.id, seg.start_ms)}
+                    >
+                      {formatHms(seg.start_ms)}–{formatHms(seg.end_ms)}
+                    </button>{' '}
+                    {seg.original_text !== null && (
+                      <span
+                        className="corrected-mark"
+                        title={t(lang, 'correctedTitle', { text: seg.original_text })}
+                      >
+                        {t(lang, 'correctedMark')}
+                      </span>
+                    )}{' '}
+                    {seg.text}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )
+        })
+      )}
+    </>
+  )
+
+  const slidesView = (
+    <>
+      {effectiveSlide === null ? (
+        <p className="empty">{t(lang, 'noSlides')}</p>
+      ) : (
+        <>
+          {pdfDoneSources.length > 1 && (
+            <div className="pdf-select-row">
+              <select
+                aria-label={t(lang, 'selectPdf')}
+                value={effectiveSlide.sourceId}
+                onChange={(e) => {
+                  const id = Number(e.target.value)
+                  const found = pdfDoneSources.find((s) => s.id === id)
+                  if (found) {
+                    setSlideSel({ sourceId: found.id, pageNo: 1, displayName: found.display_name })
+                  }
+                }}
+              >
+                {pdfDoneSources.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.display_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <SlidePanel
+            lang={lang}
+            sourceId={effectiveSlide.sourceId}
+            pageNo={effectiveSlide.pageNo}
+            displayName={effectiveSlide.displayName}
+            totalPages={pageCountBySource.get(effectiveSlide.sourceId) ?? effectiveSlide.pageNo}
+            onNavigate={(pageNo) =>
+              setSlideSel({
+                sourceId: effectiveSlide.sourceId,
+                pageNo,
+                displayName: effectiveSlide.displayName,
+              })
+            }
+          />
+        </>
+      )}
+    </>
+  )
+
   return (
     <div className="app">
-      <header className="header">
-        <h1>{t(lang, 'appTitle')}</h1>
+      <header className={IS_MAC ? 'header mac' : 'header'}>
+        <h1 className="wordmark">{t(lang, 'appTitle')}</h1>
+        <span className="tagline">{t(lang, 'tagline')}</span>
+        <span className="header-spacer" />
         <span className="spend">
           ${spend.spentUsd.toFixed(4)} / ${spend.capUsd}
         </span>
@@ -550,12 +779,13 @@ export default function App() {
             />
             <button onClick={() => void handleCreateNote()}>{t(lang, 'newNote')}</button>
           </div>
+          <p className="notes-label">{t(lang, 'notesHeading')}</p>
           <ul className="note-list">
             {notes.map((note) => {
               const selected = note.id === selectedNoteId
               return (
                 <li key={note.id} className={selected ? 'note-row selected' : 'note-row'}>
-                  {renamingId === note.id ? (
+                  {renamingId === note.id && selectedNoteId !== note.id ? (
                     <input
                       className="note-rename"
                       value={renameText}
@@ -619,23 +849,57 @@ export default function App() {
         </aside>
 
         <main className="content">
-          {selectedNoteId === null ? (
-            notes.length === 0 ? (
-              <div className="empty-state">
-                <p>{t(lang, 'emptyTitle')}</p>
-                <p className="empty-hint">{t(lang, 'emptyHint')}</p>
-                {importingSample && <p className="empty-hint">{t(lang, 'importing')}</p>}
-                {sampleList}
-              </div>
-            ) : (
-              <p className="empty">{t(lang, 'selectNote')}</p>
-            )
+          {selectedNoteId === null || selectedNote === null ? (
+            <div className="empty-state">
+              <p className="wordmark-large">{t(lang, 'appTitle')}</p>
+              <p className="empty-mantra">{t(lang, 'emptyMantra')}</p>
+              {notes.length === 0 ? (
+                <>
+                  {importingSample && <p className="empty-hint">{t(lang, 'importing')}</p>}
+                  {sampleList}
+                </>
+              ) : (
+                <p className="empty-hint">{t(lang, 'selectNote')}</p>
+              )}
+            </div>
           ) : (
             <>
+              <div className="note-head">
+                {renamingId === selectedNote.id ? (
+                  <input
+                    className="note-title-input"
+                    value={renameText}
+                    autoFocus
+                    onChange={(e) => setRenameText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void handleRenameSave(selectedNote.id)
+                      else if (e.key === 'Escape') handleRenameCancel()
+                    }}
+                    onBlur={() => void handleRenameSave(selectedNote.id)}
+                  />
+                ) : (
+                  <h2
+                    className="note-title"
+                    title={t(lang, 'renameHint')}
+                    onDoubleClick={() => handleRenameStart(selectedNote)}
+                  >
+                    {selectedNote.title}
+                  </h2>
+                )}
+              </div>
+
+              <div className="sources-row">
+                <span className="sources-label">{t(lang, 'sourcesHeading')}</span>
+                {sources.length === 0 ? (
+                  <span className="sources-empty">{t(lang, 'noSources')}</span>
+                ) : (
+                  sources.map(sourcePill)
+                )}
+              </div>
+
               <div className="content-actions">
-                <button onClick={() => void handleAddAudio()}>{t(lang, 'addAudio')}</button>
-                <button onClick={() => void handleAddPdf()}>{t(lang, 'addPdf')}</button>
                 <button
+                  className="btn-primary"
                   onClick={() => void handleRunSummary()}
                   disabled={summaryRunning || !sources.some((s) => s.status === 'done')}
                 >
@@ -651,217 +915,189 @@ export default function App() {
                 >
                   {t(lang, 'suggestCorrections')}
                 </button>
+                <button onClick={() => void handleAddAudio()}>{t(lang, 'addAudio')}</button>
+                <button onClick={() => void handleAddPdf()}>{t(lang, 'addPdf')}</button>
                 {summaryRunning && (
                   <span className="summary-progress">
-                    {summaryStage === 'verifying' ? t(lang, 'verifying') : t(lang, 'summarizing')}
+                    <ProgressText
+                      text={
+                        summaryStage === 'verifying' ? t(lang, 'verifying') : t(lang, 'summarizing')
+                      }
+                    />
                   </span>
                 )}
                 {correctionsRunning && (
                   <span className="summary-progress">
-                    {correctionStage === 'done' ? t(lang, 'doneLabel') : t(lang, 'generatingCorrections')}
+                    <ProgressText
+                      text={
+                        correctionStage === 'done'
+                          ? t(lang, 'doneLabel')
+                          : t(lang, 'generatingCorrections')
+                      }
+                    />
                   </span>
                 )}
               </div>
-              {summary !== null && summary.claims.length > 0 && (
-                <section className="summary">
-                  <h3 className="section-title">{t(lang, 'citedSummary')}</h3>
-                  <div className="summary-counts">
-                    {t(lang, 'verifiedCount')}{' '}
-                    {summary.claims.filter((c) => c.verdict === 'supported').length} ·{' '}
-                    {t(lang, 'notInSources')}{' '}
-                    {summary.claims.filter((c) => c.verdict === 'unsupported').length}
-                  </div>
-                  <ClaimList
-                    lang={lang}
-                    claims={summary.claims}
-                    onCiteSegment={handleCiteClick}
-                    onCitePage={(sourceId, pageNo, displayName) =>
-                      setSlideSel({ sourceId, pageNo, displayName })
-                    }
-                  />
-                </section>
-              )}
-              {corrections.length > 0 && (
-                <section className="summary corrections">
-                  <div className="summary-counts">
-                    {t(lang, 'suggestedFixes')}{' '}
-                    {corrections.filter((c) => c.status === 'pending').length} ·{' '}
-                    {t(lang, 'acceptedCount')}{' '}
-                    {corrections.filter((c) => c.status === 'accepted').length} ·{' '}
-                    {t(lang, 'rejectedCount')}{' '}
-                    {corrections.filter((c) => c.status === 'rejected').length}{' '}
-                    {corrections.some((c) => c.status === 'pending') && (
-                      <button
-                        className="accept-all"
-                        onClick={() => void handleAcceptAllCorrections()}
-                      >
-                        {t(lang, 'acceptAll')}
-                      </button>
-                    )}
-                  </div>
-                  <ul className="claims">
-                    {corrections
-                      .filter((c) => c.status === 'pending')
-                      .map((c) => (
-                        <li key={c.id} className="claim">
-                          <button
-                            className="cite-chip"
-                            title={t(lang, 'playFromHere')}
-                            onClick={() => {
-                              const sourceId = sourceIdOfSegment(c.segmentId)
-                              if (sourceId !== null) {
-                                playSegment(sourceId, c.startMs)
-                                highlightSegment(c.segmentId)
-                              }
-                            }}
-                          >
-                            {formatHms(c.startMs)}
-                          </button>{' '}
-                          <span className="correction-before">{c.beforeText}</span>
-                          {' → '}
-                          <span className="correction-after">{c.afterText}</span>{' '}
-                          <span className="correction-kind">
-                            {correctionKindLabel[c.kind]}
-                          </span>{' '}
-                          <span className="correction-reason">{c.reason}</span>{' '}
-                          <button onClick={() => void handleAcceptCorrection(c.id)}>
-                            {t(lang, 'accept')}
-                          </button>{' '}
-                          <button onClick={() => void handleRejectCorrection(c.id)}>
-                            {t(lang, 'reject')}
-                          </button>
-                        </li>
-                      ))}
-                  </ul>
-                </section>
-              )}
-              <section className="summary check-notes">
-                <h3 className="section-title">{t(lang, 'checkNotesTitle')}</h3>
-                <textarea
-                  className="check-input"
-                  value={checkText}
-                  placeholder={t(lang, 'checkPlaceholder')}
-                  onChange={(e) => setCheckText(e.target.value)}
-                  rows={4}
-                />
-                <div className="check-actions">
-                  <button
-                    onClick={() => void handleRunCheck()}
-                    disabled={checkRunning || checkText.trim().length === 0}
-                  >
-                    {checkRunning ? t(lang, 'checking') : t(lang, 'checkButton')}
-                  </button>
-                </div>
-                {checkResult !== null && checkResult.claims.length > 0 && (
-                  <>
-                    <div className="summary-counts">
-                      {t(lang, 'verifiedCount')}{' '}
-                      {checkResult.claims.filter((c) => c.verdict === 'supported').length} ·{' '}
-                      {t(lang, 'notInSources')}{' '}
-                      {checkResult.claims.filter((c) => c.verdict === 'unsupported').length}
+
+              <div className="panes">
+                <section className="pane pane-left">
+                  {summary !== null && summary.claims.length > 0 && (
+                    <div className="summary-block">
+                      <div className="section-head">
+                        <h3 className="section-title">{t(lang, 'citedSummary')}</h3>
+                      </div>
+                      {countLine(summary.claims)}
+                      <ClaimList
+                        lang={lang}
+                        claims={summary.claims}
+                        onCiteSegment={handleCiteClick}
+                        onCitePage={handlePageCiteClick}
+                      />
                     </div>
-                    <ClaimList
-                      lang={lang}
-                      claims={checkResult.claims}
-                      onCiteSegment={handleCiteClick}
-                      onCitePage={(sourceId, pageNo, displayName) =>
-                        setSlideSel({ sourceId, pageNo, displayName })
-                      }
-                    />
-                  </>
-                )}
-              </section>
-              {sources.length === 0 && <p className="empty">{t(lang, 'noSources')}</p>}
-              {sources.map((source) => {
-                const progress = progressBySource[source.id]
-                const segments = segmentsBySource[source.id] ?? []
-                const pageCount = pageCountBySource.get(source.id) ?? 0
-                return (
-                  <section key={source.id} className="source">
-                    <header className="source-header">
-                      <span className="source-name">{source.display_name}</span>
-                      <span className={`status status-${source.status}`}>
-                        {source.status === 'transcribing' && progress && progress.totalChunks > 0
-                          ? t(lang, 'transcribingProgress', {
-                              done: progress.chunk,
-                              total: progress.totalChunks,
-                            })
-                          : t(lang, STATUS_KEY[source.status])}
-                      </span>
-                    </header>
-                    {source.duration_ms !== null && (
-                      <div className="source-meta">
-                        {t(lang, 'lengthLabel', { hms: formatHms(source.duration_ms) })}
+                  )}
+                  {corrections.length > 0 && (
+                    <div className="summary-block">
+                      <div className="collapsible-head">
+                        <h3 className="section-title">{t(lang, 'suggestedFixes')}</h3>
+                        <button
+                          className="collapse-btn"
+                          aria-expanded={correctionsOpen}
+                          onClick={() => setCorrectionsOpen((v) => !v)}
+                        >
+                          {correctionsOpen ? t(lang, 'collapse') : t(lang, 'expand')}
+                        </button>
                       </div>
-                    )}
-                    {source.kind === 'pdf' && source.status === 'done' && (
-                      <div className="source-meta">
-                        {t(lang, 'slidesLabel', { count: pageCount })}
-                      </div>
-                    )}
-                    {source.status === 'error' && source.error !== null && (
-                      <div className="source-error">{source.error}</div>
-                    )}
-                    {segments.length > 0 && (
-                      <ul className="segments">
-                        {segments.map((seg) => (
-                          <li
-                            key={seg.id}
-                            id={`segment-${seg.id}`}
-                            data-segment-id={seg.id}
-                            className={seg.id === shownSegmentId ? 'highlight' : undefined}
+                      <p className="counts-line">
+                        {t(lang, 'suggestedFixes')}{' '}
+                        {corrections.filter((c) => c.status === 'pending').length} ·{' '}
+                        {t(lang, 'acceptedCount')}{' '}
+                        {corrections.filter((c) => c.status === 'accepted').length} ·{' '}
+                        {t(lang, 'rejectedCount')}{' '}
+                        {corrections.filter((c) => c.status === 'rejected').length}{' '}
+                        {corrections.some((c) => c.status === 'pending') && (
+                          <button
+                            className="accept-all"
+                            onClick={() => void handleAcceptAllCorrections()}
                           >
-                            <button
-                              className="seg-time"
-                              title={t(lang, 'playFromHere')}
-                              onClick={() =>
-                                handleTimestampClick(source.id, seg.id, seg.start_ms)
-                              }
-                            >
-                              [{formatHms(seg.start_ms)}–{formatHms(seg.end_ms)}]
-                            </button>{' '}
-                            {seg.original_text !== null && (
-                              <span
-                                className="corrected-mark"
-                                title={t(lang, 'correctedTitle', {
-                                  text: seg.original_text,
-                                })}
-                              >
-                                {t(lang, 'correctedMark')}
-                              </span>
-                            )}{' '}
-                            {seg.text}
-                          </li>
-                        ))}
-                      </ul>
+                            {t(lang, 'acceptAll')}
+                          </button>
+                        )}
+                      </p>
+                      {correctionsOpen && (
+                        <ul className="claims">
+                          {corrections
+                            .filter((c) => c.status === 'pending')
+                            .map((c) => (
+                              <li key={c.id} className="claim term-row">
+                                <span className="gutter" aria-hidden="true" />
+                                <div className="claim-body">
+                                  <button
+                                    className="cite-chip"
+                                    title={t(lang, 'playFromHere')}
+                                    onClick={() => {
+                                      const sourceId = sourceIdOfSegment(c.segmentId)
+                                      if (sourceId !== null) {
+                                        playSegment(sourceId, c.startMs)
+                                        highlightSegment(c.segmentId)
+                                      }
+                                    }}
+                                  >
+                                    {formatHms(c.startMs)}
+                                  </button>{' '}
+                                  <span className="correction-before">{c.beforeText}</span>
+                                  {' → '}
+                                  <span className="correction-after">{c.afterText}</span>{' '}
+                                  <span className="correction-kind">
+                                    {correctionKindLabel[c.kind]}
+                                  </span>{' '}
+                                  <span className="correction-reason">{c.reason}</span>
+                                  <div className="term-actions">
+                                    <button onClick={() => void handleAcceptCorrection(c.id)}>
+                                      {t(lang, 'accept')}
+                                    </button>
+                                    <button onClick={() => void handleRejectCorrection(c.id)}>
+                                      {t(lang, 'reject')}
+                                    </button>
+                                  </div>
+                                </div>
+                              </li>
+                            ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+                  <div className="summary-block">
+                    <div className="section-head">
+                      <h3 className="section-title">{t(lang, 'checkNotesTitle')}</h3>
+                    </div>
+                    <textarea
+                      className="check-input"
+                      value={checkText}
+                      placeholder={t(lang, 'checkPlaceholder')}
+                      onChange={(e) => setCheckText(e.target.value)}
+                      rows={4}
+                    />
+                    <div className="check-actions">
+                      <button
+                        onClick={() => void handleRunCheck()}
+                        disabled={checkRunning || checkText.trim().length === 0}
+                      >
+                        {checkRunning ? t(lang, 'checking') : t(lang, 'checkButton')}
+                      </button>
+                    </div>
+                    {checkResult !== null && checkResult.claims.length > 0 && (
+                      <>
+                        {countLine(checkResult.claims)}
+                        <ClaimList
+                          lang={lang}
+                          claims={checkResult.claims}
+                          onCiteSegment={handleCiteClick}
+                          onCitePage={handlePageCiteClick}
+                        />
+                      </>
                     )}
-                  </section>
-                )
-              })}
-              {playerSource !== null && (
-                <AudioPlayer
-                  lang={lang}
-                  sourceId={playerSource.id}
-                  sourceName={playerSource.display_name}
-                  startMs={playerStartMs}
-                  playToken={playToken}
-                  onTimeUpdate={handlePlayerTime}
-                />
-              )}
+                  </div>
+                </section>
+
+                <section className="pane pane-right">
+                  <div className="tabs" role="tablist">
+                    <button
+                      role="tab"
+                      aria-selected={rightTab === 'transcript'}
+                      className={rightTab === 'transcript' ? 'tab active' : 'tab'}
+                      onClick={() => setRightTab('transcript')}
+                    >
+                      {t(lang, 'transcriptTab')}
+                    </button>
+                    <button
+                      role="tab"
+                      aria-selected={rightTab === 'slides'}
+                      className={rightTab === 'slides' ? 'tab active' : 'tab'}
+                      onClick={() => setRightTab('slides')}
+                    >
+                      {t(lang, 'slidesTab')}
+                    </button>
+                  </div>
+                  <div className="tab-body">
+                    {rightTab === 'transcript' ? transcriptView : slidesView}
+                  </div>
+                  {playerSource !== null && (
+                    <div className="player-dock">
+                      <AudioPlayer
+                        lang={lang}
+                        sourceId={playerSource.id}
+                        sourceName={playerSource.display_name}
+                        startMs={playerStartMs}
+                        playToken={playToken}
+                        onTimeUpdate={handlePlayerTime}
+                      />
+                    </div>
+                  )}
+                </section>
+              </div>
             </>
           )}
         </main>
-        {slideSel !== null && (
-          <SlidePanel
-            lang={lang}
-            sourceId={slideSel.sourceId}
-            pageNo={slideSel.pageNo}
-            displayName={slideSel.displayName}
-            totalPages={pageCountBySource.get(slideSel.sourceId) ?? slideSel.pageNo}
-            onNavigate={(pageNo) => setSlideSel((prev) => (prev ? { ...prev, pageNo } : prev))}
-            onClose={() => setSlideSel(null)}
-          />
-        )}
       </div>
       {deleteTarget !== null && (
         <div className="modal-backdrop">

@@ -14,10 +14,9 @@ interface SlidePanelProps {
   displayName: string
   totalPages: number
   onNavigate: (pageNo: number) => void
-  onClose: () => void
 }
 
-/** Right-side panel rendering one PDF slide page on a canvas. */
+/** Pane-filling viewer rendering one PDF slide page on a canvas. */
 export default function SlidePanel({
   lang,
   sourceId,
@@ -25,13 +24,29 @@ export default function SlidePanel({
   displayName,
   totalPages,
   onNavigate,
-  onClose,
 }: SlidePanelProps) {
+  const wrapRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [paneWidth, setPaneWidth] = useState(0)
+
+  // Render at the pane width (times devicePixelRatio); re-render on resize.
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const measure = (): void => {
+      const w = el.clientWidth
+      if (w > 0) setPaneWidth(w)
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   useEffect(() => {
+    if (paneWidth <= 0) return
     let cancelled = false
     setLoading(true)
     setError(null)
@@ -49,15 +64,13 @@ export default function SlidePanel({
         if (cancelled) return
         const canvas = canvasRef.current
         if (!canvas) return
-        // Fit to the panel width.
-        const width = 360
         const base = page.getViewport({ scale: 1 })
         // Render at device pixel ratio so slide text stays sharp on Retina.
         const dpr = window.devicePixelRatio || 1
-        const viewport = page.getViewport({ scale: (width / base.width) * dpr })
+        const viewport = page.getViewport({ scale: (paneWidth / base.width) * dpr })
         canvas.width = Math.floor(viewport.width)
         canvas.height = Math.floor(viewport.height)
-        canvas.style.width = `${width}px`
+        canvas.style.width = `${paneWidth}px`
         canvas.style.height = `${Math.floor(viewport.height / dpr)}px`
         const ctx = canvas.getContext('2d')
         if (!ctx) {
@@ -80,19 +93,23 @@ export default function SlidePanel({
     return () => {
       cancelled = true
     }
-  }, [sourceId, pageNo, lang])
+  }, [sourceId, pageNo, lang, paneWidth])
 
   return (
-    <aside className="slide-panel" aria-label={t(lang, 'slideRegion')}>
-      <header className="slide-header">
-        <span className="slide-title">
-          {displayName} p.{pageNo}/{totalPages}
+    <div className="slide-view" aria-label={t(lang, 'slideRegion')}>
+      <div className="slide-header">
+        <span className="slide-title" title={displayName}>
+          {displayName}
         </span>
-        <button onClick={onClose}>{t(lang, 'close')}</button>
-      </header>
-      {loading && <p className="empty">{t(lang, 'slideLoading')}</p>}
-      {error !== null && <p className="source-error">{error}</p>}
-      <canvas ref={canvasRef} className="slide-canvas" />
+        <span className="page-indicator">
+          p.{pageNo} / {totalPages}
+        </span>
+      </div>
+      <div ref={wrapRef}>
+        {loading && <p className="empty">{t(lang, 'slideLoading')}</p>}
+        {error !== null && <p className="source-error">{error}</p>}
+        <canvas ref={canvasRef} className="slide-canvas" />
+      </div>
       <footer className="slide-nav">
         <button disabled={pageNo <= 1} onClick={() => onNavigate(pageNo - 1)}>
           {t(lang, 'prev')}
@@ -100,7 +117,10 @@ export default function SlidePanel({
         <button disabled={pageNo >= totalPages} onClick={() => onNavigate(pageNo + 1)}>
           {t(lang, 'next')}
         </button>
+        <span className="page-indicator">
+          p.{pageNo} / {totalPages}
+        </span>
       </footer>
-    </aside>
+    </div>
   )
 }

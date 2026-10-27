@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, protocol } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, protocol } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import { Readable } from 'node:stream'
@@ -381,9 +381,15 @@ function registerIpc(getWindow: () => BrowserWindow | null): void {
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
-    width: 1100,
-    height: 720,
+    width: 1320,
+    height: 860,
+    minWidth: 1080,
+    minHeight: 680,
+    // Paper background so the first paint never flashes white.
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1B1916' : '#F5F0E6',
     title: 'Sourcenote',
+    // macOS: the app header is the drag region (traffic lights float over it).
+    ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset' as const } : {}),
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.cjs'),
       contextIsolation: true,
