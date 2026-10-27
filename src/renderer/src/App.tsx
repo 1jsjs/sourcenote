@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   Note,
+  NotePage,
   ProgressEvent,
   Segment,
   Source,
@@ -8,6 +9,8 @@ import type {
   Summary,
   SummaryProgressEvent,
 } from '../../shared/types'
+import AudioPlayer from './AudioPlayer'
+import SlidePanel from './SlidePanel'
 
 const STATUS_LABEL: Record<SourceStatus, string> = {
   pending: '대기',
@@ -39,6 +42,16 @@ export default function App() {
   const [summaryRunning, setSummaryRunning] = useState(false)
   const [summaryStage, setSummaryStage] = useState<SummaryProgressEvent['stage'] | null>(null)
   const [highlightedSegmentId, setHighlightedSegmentId] = useState<number | null>(null)
+  const [pages, setPages] = useState<NotePage[]>([])
+  const [playerSourceId, setPlayerSourceId] = useState<number | null>(null)
+  const [playerStartMs, setPlayerStartMs] = useState(0)
+  const [playToken, setPlayToken] = useState(0)
+  const [activeSegmentId, setActiveSegmentId] = useState<number | null>(null)
+  const [slideSel, setSlideSel] = useState<{
+    sourceId: number
+    pageNo: number
+    displayName: string
+  } | null>(null)
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const refreshSpend = useCallback(async () => {
@@ -58,6 +71,7 @@ export default function App() {
         done.map(async (s) => [s.id, await window.sourcenote.listSegments(s.id)] as const),
       )
       setSegmentsBySource(Object.fromEntries(entries))
+      setPages(await window.sourcenote.listPages(noteId))
     },
     [],
   )
@@ -79,6 +93,10 @@ export default function App() {
       setSources([])
       setSegmentsBySource({})
       setSummary(null)
+      setPages([])
+      setPlayerSourceId(null)
+      setActiveSegmentId(null)
+      setSlideSel(null)
     }
     setSummaryRunning(false)
     setSummaryStage(null)
@@ -142,6 +160,17 @@ export default function App() {
     }
   }
 
+  const handleAddPdf = async (): Promise<void> => {
+    if (selectedNoteId === null) return
+    setError(null)
+    try {
+      const source = await window.sourcenote.addPdfSource(selectedNoteId)
+      if (source) await refreshSources(selectedNoteId)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
   const handleRunSummary = async (): Promise<void> => {
     if (selectedNoteId === null) return
     setError(null)
@@ -156,7 +185,7 @@ export default function App() {
     }
   }
 
-  const handleCiteClick = (segmentId: number): void => {
+  const highlightSegment = (segmentId: number): void => {
     const element = document.getElementById(`segment-${segmentId}`)
     if (element) {
       element.scrollIntoView({ block: 'center' })
@@ -165,6 +194,41 @@ export default function App() {
       highlightTimer.current = setTimeout(() => setHighlightedSegmentId(null), 2000)
     }
   }
+
+  /** Switches the player to the segment's source if needed, seeks and plays. */
+  const playSegment = useCallback((sourceId: number, startMs: number): void => {
+    setPlayerSourceId(sourceId)
+    setPlayerStartMs(startMs)
+    setPlayToken((t) => t + 1)
+  }, [])
+
+  const handleCiteClick = (sourceId: number, segmentId: number, startMs: number): void => {
+    playSegment(sourceId, startMs)
+    highlightSegment(segmentId)
+  }
+
+  const handleTimestampClick = (sourceId: number, segmentId: number, startMs: number): void => {
+    playSegment(sourceId, startMs)
+    highlightSegment(segmentId)
+  }
+
+  const handlePlayerTime = useCallback(
+    (sourceId: number, currentMs: number): void => {
+      const segments = segmentsBySource[sourceId] ?? []
+      const active = segments.find((s) => s.start_ms <= currentMs && currentMs < s.end_ms)
+      setActiveSegmentId(active?.id ?? null)
+    },
+    [segmentsBySource],
+  )
+
+  const doneAudioSources = sources.filter((s) => s.kind === 'audio' && s.status === 'done')
+  const playerSource =
+    doneAudioSources.find((s) => s.id === playerSourceId) ?? doneAudioSources[0] ?? null
+  const pageCountBySource = new Map<number, number>()
+  for (const p of pages) {
+    pageCountBySource.set(p.sourceId, (pageCountBySource.get(p.sourceId) ?? 0) + 1)
+  }
+  const shownSegmentId = highlightedSegmentId ?? activeSegmentId
 
   return (
     <div className="app">
@@ -219,6 +283,7 @@ export default function App() {
             <>
               <div className="content-actions">
                 <button onClick={() => void handleAddAudio()}>오디오 파일 추가</button>
+                <button onClick={() => void handleAddPdf()}>PDF 추가</button>
                 <button
                   onClick={() => void handleRunSummary()}
                   disabled={summaryRunning || !sources.some((s) => s.status === 'done')}
@@ -255,9 +320,27 @@ export default function App() {
                             key={cite.segmentId}
                             className="cite-chip"
                             title={cite.text}
-                            onClick={() => handleCiteClick(cite.segmentId)}
+                            onClick={() =>
+                              handleCiteClick(cite.sourceId, cite.segmentId, cite.startMs)
+                            }
                           >
                             {formatHms(cite.startMs)}
+                          </button>
+                        ))}
+                        {claim.pageCitations.map((cite) => (
+                          <button
+                            key={cite.pageId}
+                            className="page-chip"
+                            title={cite.text}
+                            onClick={() =>
+                              setSlideSel({
+                                sourceId: cite.sourceId,
+                                pageNo: cite.pageNo,
+                                displayName: cite.sourceDisplayName,
+                              })
+                            }
+                          >
+                            p.{cite.pageNo}
                           </button>
                         ))}
                         {claim.verdict === 'unsupported' && claim.reason !== null && (
@@ -268,10 +351,11 @@ export default function App() {
                   </ul>
                 </section>
               )}
-              {sources.length === 0 && <p className="empty">추가된 오디오가 없습니다.</p>}
+              {sources.length === 0 && <p className="empty">추가된 자료가 없습니다.</p>}
               {sources.map((source) => {
                 const progress = progressBySource[source.id]
                 const segments = segmentsBySource[source.id] ?? []
+                const pageCount = pageCountBySource.get(source.id) ?? 0
                 return (
                   <section key={source.id} className="source">
                     <header className="source-header">
@@ -286,6 +370,9 @@ export default function App() {
                     {source.duration_ms !== null && (
                       <div className="source-meta">길이 {formatHms(source.duration_ms)}</div>
                     )}
+                    {source.kind === 'pdf' && source.status === 'done' && (
+                      <div className="source-meta">슬라이드 {pageCount}페이지</div>
+                    )}
                     {source.status === 'error' && source.error !== null && (
                       <div className="source-error">{source.error}</div>
                     )}
@@ -296,11 +383,17 @@ export default function App() {
                             key={seg.id}
                             id={`segment-${seg.id}`}
                             data-segment-id={seg.id}
-                            className={seg.id === highlightedSegmentId ? 'highlight' : undefined}
+                            className={seg.id === shownSegmentId ? 'highlight' : undefined}
                           >
-                            <span className="seg-time">
+                            <button
+                              className="seg-time"
+                              title="이 위치부터 재생"
+                              onClick={() =>
+                                handleTimestampClick(source.id, seg.id, seg.start_ms)
+                              }
+                            >
                               [{formatHms(seg.start_ms)}–{formatHms(seg.end_ms)}]
-                            </span>{' '}
+                            </button>{' '}
                             {seg.text}
                           </li>
                         ))}
@@ -309,9 +402,28 @@ export default function App() {
                   </section>
                 )
               })}
+              {playerSource !== null && (
+                <AudioPlayer
+                  sourceId={playerSource.id}
+                  sourceName={playerSource.display_name}
+                  startMs={playerStartMs}
+                  playToken={playToken}
+                  onTimeUpdate={handlePlayerTime}
+                />
+              )}
             </>
           )}
         </main>
+        {slideSel !== null && (
+          <SlidePanel
+            sourceId={slideSel.sourceId}
+            pageNo={slideSel.pageNo}
+            displayName={slideSel.displayName}
+            totalPages={pageCountBySource.get(slideSel.sourceId) ?? slideSel.pageNo}
+            onNavigate={(pageNo) => setSlideSel((prev) => (prev ? { ...prev, pageNo } : prev))}
+            onClose={() => setSlideSel(null)}
+          />
+        )}
       </div>
     </div>
   )

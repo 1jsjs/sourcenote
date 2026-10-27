@@ -49,9 +49,19 @@ export type ClaimVerdict = 'pending' | 'supported' | 'unsupported'
 /** One cited transcript segment attached to a claim. */
 export interface ClaimCitation {
   segmentId: number
+  sourceId: number
   startMs: number
   endMs: number
   text: string
+  sourceDisplayName: string
+}
+
+/** One cited PDF slide page attached to a claim. */
+export interface ClaimPageCitation {
+  pageId: number
+  pageNo: number
+  text: string
+  sourceId: number
   sourceDisplayName: string
 }
 
@@ -62,6 +72,16 @@ export interface Claim {
   verdict: ClaimVerdict
   reason: string | null
   citations: ClaimCitation[]
+  pageCitations: ClaimPageCitation[]
+}
+
+/** One extracted PDF slide page of a note, in page order. */
+export interface NotePage {
+  id: number
+  sourceId: number
+  pageNo: number
+  text: string
+  displayName: string
 }
 
 export interface Summary {
@@ -89,7 +109,11 @@ export interface SourcenoteApi {
   listSources(noteId: number): Promise<Source[]>
   /** Opens a file dialog, registers the source and starts the pipeline. */
   addAudioSource(noteId: number): Promise<Source | null>
+  /** Opens a PDF dialog, registers the source and extracts per-page text. */
+  addPdfSource(noteId: number): Promise<Source | null>
   listSegments(sourceId: number): Promise<Segment[]>
+  /** All extracted PDF pages of a note in order (for page counts). */
+  listPages(noteId: number): Promise<NotePage[]>
   getSpend(): Promise<{ spentUsd: number; capUsd: number }>
   onProgress(cb: (event: ProgressEvent) => void): () => void
   /** Starts the citation-enforced summary pipeline in the background. */

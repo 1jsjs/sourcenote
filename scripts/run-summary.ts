@@ -23,7 +23,11 @@ function formatHms(ms: number): string {
 function printClaim(claim: Claim): void {
   const mark = claim.verdict === 'supported' ? '✓' : '✗ 자료에 없음'
   const times = claim.citations.map((c) => formatHms(c.startMs)).join(', ')
-  console.log(`${mark} ${claim.text} [${times}]`)
+  const pages = claim.pageCitations
+    .map((p) => `[p.${p.pageNo} ${p.sourceDisplayName}]`)
+    .join(' ')
+  const suffix = [times ? `[${times}]` : '', pages].filter((s) => s.length > 0).join(' ')
+  console.log(`${mark} ${claim.text}${suffix ? ` ${suffix}` : ''}`)
   if (claim.verdict === 'unsupported' && claim.reason) {
     console.log(`  사유: ${claim.reason}`)
   }

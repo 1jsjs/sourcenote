@@ -145,7 +145,7 @@ describe('runSummaryPipeline', () => {
   it('throws a Korean error when there is nothing to summarize', async () => {
     const note = createNote(db, '빈 노트')
     await expect(runSummaryPipeline(makeDeps(db, fakeMetaApi({}, () => ({})).api, []), note.id)).rejects.toThrow(
-      '요약할 전사 구간이 없습니다',
+      '요약할 자료가 없습니다',
     )
     expect(getLatestSummary(db, note.id)).toBeNull()
   })

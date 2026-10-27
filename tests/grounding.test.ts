@@ -103,9 +103,9 @@ describe('validateSummaryPayload', () => {
     expect(() => validateSummaryPayload({ claims: [{ text: 42 }] })).toThrow('형식')
   })
 
-  it('treats a missing segment_ids array as empty', () => {
+  it('treats missing segment_ids/page_ids arrays as empty', () => {
     expect(validateSummaryPayload({ claims: [{ text: 't' }] })).toEqual([
-      { text: 't', segmentIds: [] },
+      { text: 't', segmentIds: [], pageIds: [] },
     ])
   })
 })

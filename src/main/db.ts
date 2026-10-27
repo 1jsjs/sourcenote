@@ -2,8 +2,10 @@ import { DatabaseSync } from 'node:sqlite'
 import type {
   Claim,
   ClaimCitation,
+  ClaimPageCitation,
   ClaimVerdict,
   Note,
+  NotePage,
   Segment,
   Source,
   SourceStatus,
@@ -76,6 +78,21 @@ const MIGRATIONS: string[] = [
     claim_id INTEGER NOT NULL REFERENCES claims(id),
     segment_id INTEGER NOT NULL REFERENCES segments(id),
     PRIMARY KEY (claim_id, segment_id)
+  );
+  `,
+  // version 3: PDF slides as a second evidence type (stage 3)
+  `
+  CREATE TABLE pages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_id INTEGER NOT NULL REFERENCES sources(id),
+    page_no INTEGER NOT NULL,
+    text TEXT NOT NULL
+  );
+  CREATE INDEX idx_pages_source ON pages(source_id, page_no);
+  CREATE TABLE claim_page_citations (
+    claim_id INTEGER NOT NULL REFERENCES claims(id),
+    page_id INTEGER NOT NULL REFERENCES pages(id),
+    PRIMARY KEY (claim_id, page_id)
   );
   `,
 ]
@@ -254,6 +271,8 @@ export interface NewClaim {
   verdict: ClaimVerdict
   reason: string | null
   segmentIds: number[]
+  /** Cited slide page DB ids (stage 3). Optional so stage-2 callers keep working. */
+  pageIds?: number[]
 }
 
 /** Inserts claims with their citations in one transaction. Returns claim ids in order. */
@@ -268,6 +287,9 @@ export function insertClaimsWithCitations(
   const citeStmt = db.prepare(
     'INSERT OR IGNORE INTO claim_citations (claim_id, segment_id) VALUES (?, ?)',
   )
+  const pageCiteStmt = db.prepare(
+    'INSERT OR IGNORE INTO claim_page_citations (claim_id, page_id) VALUES (?, ?)',
+  )
   const ids: number[] = []
   db.exec('BEGIN')
   try {
@@ -277,6 +299,9 @@ export function insertClaimsWithCitations(
       ids.push(claimId)
       for (const segmentId of c.segmentIds) {
         citeStmt.run(claimId, segmentId)
+      }
+      for (const pageId of c.pageIds ?? []) {
+        pageCiteStmt.run(claimId, pageId)
       }
     }
     db.exec('COMMIT')
@@ -325,6 +350,52 @@ export function listNoteSegments(db: DatabaseSync, noteId: number): NoteSegment[
   return rows
 }
 
+// ---------------------------------------------------------------------------
+// pages (stage 3: PDF slides as evidence)
+// ---------------------------------------------------------------------------
+
+export interface NewPage {
+  pageNo: number
+  text: string
+}
+
+/** Inserts page rows for a source in one transaction. Returns page ids in order. */
+export function insertPages(db: DatabaseSync, sourceId: number, pages: NewPage[]): number[] {
+  const stmt = db.prepare(
+    'INSERT INTO pages (source_id, page_no, text) VALUES (?, ?, ?)',
+  )
+  const ids: number[] = []
+  db.exec('BEGIN')
+  try {
+    for (const p of pages) {
+      const res = stmt.run(sourceId, p.pageNo, p.text)
+      ids.push(Number(res.lastInsertRowid))
+    }
+    db.exec('COMMIT')
+  } catch (err) {
+    db.exec('ROLLBACK')
+    throw err
+  }
+  return ids
+}
+
+/**
+ * All extracted pages of a note in order (PDF sources by id, then page_no).
+ * Only sources with status 'done' are included.
+ */
+export function listNotePages(db: DatabaseSync, noteId: number): NotePage[] {
+  const rows = db
+    .prepare(
+      'SELECT pg.id AS id, pg.source_id AS sourceId, pg.page_no AS pageNo, ' +
+        'pg.text AS text, src.display_name AS displayName ' +
+        'FROM pages pg JOIN sources src ON src.id = pg.source_id ' +
+        "WHERE src.note_id = ? AND src.kind = 'pdf' AND src.status = 'done' " +
+        'ORDER BY src.id, pg.page_no',
+    )
+    .all(noteId) as unknown as NotePage[]
+  return rows
+}
+
 /** Latest summary of a note with claims and their cited segments, or null. */
 export function getLatestSummary(db: DatabaseSync, noteId: number): Summary | null {
   const summary = db
@@ -343,12 +414,20 @@ export function getLatestSummary(db: DatabaseSync, noteId: number): Summary | nu
   }>
 
   const citeStmt = db.prepare(
-    'SELECT seg.id AS segmentId, seg.start_ms AS startMs, seg.end_ms AS endMs, ' +
-      'seg.text AS text, src.display_name AS sourceDisplayName ' +
+    'SELECT seg.id AS segmentId, seg.source_id AS sourceId, seg.start_ms AS startMs, ' +
+      'seg.end_ms AS endMs, seg.text AS text, src.display_name AS sourceDisplayName ' +
       'FROM claim_citations cc ' +
       'JOIN segments seg ON seg.id = cc.segment_id ' +
       'JOIN sources src ON src.id = seg.source_id ' +
       'WHERE cc.claim_id = ? ORDER BY seg.id',
+  )
+  const pageCiteStmt = db.prepare(
+    'SELECT pg.id AS pageId, pg.page_no AS pageNo, pg.text AS text, ' +
+      'src.id AS sourceId, src.display_name AS sourceDisplayName ' +
+      'FROM claim_page_citations cc ' +
+      'JOIN pages pg ON pg.id = cc.page_id ' +
+      'JOIN sources src ON src.id = pg.source_id ' +
+      'WHERE cc.claim_id = ? ORDER BY pg.id',
   )
   const claims: Claim[] = claimRows.map((c) => ({
     id: c.id,
@@ -357,6 +436,7 @@ export function getLatestSummary(db: DatabaseSync, noteId: number): Summary | nu
     verdict: c.verdict,
     reason: c.reason,
     citations: citeStmt.all(c.id) as unknown as ClaimCitation[],
+    pageCitations: pageCiteStmt.all(c.id) as unknown as ClaimPageCitation[],
   }))
 
   return {

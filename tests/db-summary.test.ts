@@ -33,12 +33,12 @@ describe('db v2 (summaries + claims)', () => {
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
-  it('opens at user_version 2', () => {
+  it('opens at user_version 3', () => {
     const row = db.prepare('PRAGMA user_version').get() as { user_version: number }
-    expect(row.user_version).toBe(2)
+    expect(row.user_version).toBe(3)
   })
 
-  it('migrates a v1 database file to v2 without losing data', () => {
+  it('migrates a v1 database file to v3 without losing data', () => {
     // Seed v1-shaped data, then roll the version back to simulate a v1 file.
     const note = createNote(db, '기존 노트')
     const source = createSource(db, {
@@ -50,6 +50,8 @@ describe('db v2 (summaries + claims)', () => {
     insertSegments(db, source.id, [
       { idx: 0, startMs: 0, endMs: 1000, text: '보존되어야 함', chunkIndex: 0 },
     ])
+    db.exec('DROP TABLE claim_page_citations')
+    db.exec('DROP TABLE pages')
     db.exec('DROP TABLE claim_citations')
     db.exec('DROP TABLE claims')
     db.exec('DROP TABLE summaries')
@@ -58,7 +60,7 @@ describe('db v2 (summaries + claims)', () => {
 
     db = openDb(dbFile)
     const row = db.prepare('PRAGMA user_version').get() as { user_version: number }
-    expect(row.user_version).toBe(2)
+    expect(row.user_version).toBe(3)
     // v1 data survived the migration.
     expect(listNoteSegments(db, note.id)).toHaveLength(0) // source not done yet
     updateSourceStatus(db, source.id, 'done')

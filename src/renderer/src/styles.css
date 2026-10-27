@@ -207,6 +207,17 @@ button:hover {
   cursor: pointer;
 }
 
+.page-chip {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: #1c7c34;
+  background: #e5f6e8;
+  border-color: #c4e6cb;
+  padding: 1px 8px;
+  margin: 0 2px;
+  cursor: pointer;
+}
+
 .segments li.highlight {
   background: #fff4e0;
   border-radius: 4px;
@@ -293,4 +304,89 @@ button:hover {
   font-variant-numeric: tabular-nums;
   color: #1a56db;
   white-space: nowrap;
+}
+
+button.seg-time {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: inherit;
+  cursor: pointer;
+}
+
+button.seg-time:hover {
+  background: transparent;
+  text-decoration: underline;
+}
+
+.player {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #ffffff;
+  border: 1px solid #e4e4e8;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-top: 14px;
+}
+
+.player-name {
+  font-weight: 600;
+  font-size: 13px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: #555;
+  white-space: nowrap;
+}
+
+.player-progress {
+  flex: 1;
+  min-width: 80px;
+  accent-color: #1a56db;
+}
+
+.slide-panel {
+  width: 400px;
+  flex-shrink: 0;
+  border-left: 1px solid #e0e0e2;
+  background: #ffffff;
+  padding: 12px;
+  overflow-y: auto;
+}
+
+.slide-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.slide-title {
+  font-weight: 600;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slide-canvas {
+  border: 1px solid #e4e4e8;
+  border-radius: 4px;
+  max-width: 100%;
+}
+
+.slide-nav {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
 }

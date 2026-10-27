@@ -73,6 +73,62 @@ export function idByNumberMap(numbered: NumberedSegment[]): Map<number, number> 
 }
 
 // ---------------------------------------------------------------------------
+// slide pages (stage 3)
+// ---------------------------------------------------------------------------
+
+/** Maximum slide page characters shown to the model per page. */
+export const MAX_PAGE_CHARS = 3000
+
+/** Minimal page shape needed for numbering (NotePage satisfies this). */
+export interface PageInput {
+  id: number
+  pageNo: number
+  displayName: string
+  text: string
+}
+
+export interface NumberedPage {
+  k: number
+  pageId: number
+  pageNo: number
+  displayName: string
+  text: string
+  line: string
+}
+
+/** One numbered slide line as shown to the model: `[Pk] (file p.N) text`. */
+export function formatPageLine(
+  k: number,
+  displayName: string,
+  pageNo: number,
+  text: string,
+): string {
+  const clipped = text.length > MAX_PAGE_CHARS ? text.slice(0, MAX_PAGE_CHARS) : text
+  return `[P${k}] (${displayName} p.${pageNo}) ${clipped}`
+}
+
+/** Numbers non-empty pages 1..M in note order; empty pages are omitted. */
+export function numberPages(pages: PageInput[]): NumberedPage[] {
+  const nonEmpty = pages.filter((p) => p.text.trim().length > 0)
+  return nonEmpty.map((p, i) => {
+    const k = i + 1
+    return {
+      k,
+      pageId: p.id,
+      pageNo: p.pageNo,
+      displayName: p.displayName,
+      text: p.text,
+      line: formatPageLine(k, p.displayName, p.pageNo, p.text),
+    }
+  })
+}
+
+/** Consecutive-number -> page DB id map for translating model citations back. */
+export function pageIdByNumberMap(numbered: NumberedPage[]): Map<number, number> {
+  return new Map(numbered.map((p) => [p.k, p.pageId]))
+}
+
+// ---------------------------------------------------------------------------
 // summary prompt + schema
 // ---------------------------------------------------------------------------
 
@@ -80,8 +136,11 @@ export function idByNumberMap(numbered: NumberedSegment[]): Map<number, number> 
 export const SUMMARY_SYSTEM_PROMPT =
   'You are a lecture-note assistant. Summarize the lecture below in Korean.\n' +
   'Write 5–15 concise claims that cover the main points in lecture order.\n' +
-  'Every claim MUST cite 1–5 segment numbers ([n]) that directly support it.\n' +
-  'Use only information stated in the segments. Do not use outside knowledge.\n' +
+  'Every claim MUST cite 1–5 transcript segments ([n]) and/or slide pages ([Pk]) ' +
+  'that directly support it.\n' +
+  'Prefer the transcript for what the lecturer said; use slides for terms, ' +
+  'definitions, and figures shown on slides.\n' +
+  'Use only information stated in the transcript or slides. Do not use outside knowledge.\n' +
   'Do not merge unrelated points into a single claim.\n' +
   'Reply in Korean.'
 
@@ -97,8 +156,9 @@ export const SUMMARY_SCHEMA = {
         properties: {
           text: { type: 'string' },
           segment_ids: { type: 'array', items: { type: 'integer' } },
+          page_ids: { type: 'array', items: { type: 'integer' } },
         },
-        required: ['text', 'segment_ids'],
+        required: ['text', 'segment_ids', 'page_ids'],
         additionalProperties: false,
       },
     },
@@ -107,11 +167,22 @@ export const SUMMARY_SCHEMA = {
   additionalProperties: false,
 } as const
 
-/** Builds the summary chat messages from numbered transcript lines. */
-export function buildSummaryMessages(numbered: NumberedSegment[]): ChatMessage[] {
+/**
+ * Builds the summary chat messages from numbered transcript lines plus, when
+ * the note has slides, a second `Slides:` section with numbered page lines.
+ */
+export function buildSummaryMessages(
+  numbered: NumberedSegment[],
+  numberedPages: NumberedPage[] = [],
+): ChatMessage[] {
+  const parts = numbered.map((s) => s.line)
+  if (numberedPages.length > 0) {
+    parts.push('Slides:')
+    for (const p of numberedPages) parts.push(p.line)
+  }
   return [
     { role: 'system', content: SUMMARY_SYSTEM_PROMPT },
-    { role: 'user', content: numbered.map((s) => s.line).join('\n') },
+    { role: 'user', content: parts.join('\n') },
   ]
 }
 
@@ -122,6 +193,8 @@ export function buildSummaryMessages(numbered: NumberedSegment[]): ChatMessage[]
 export interface SummaryClaimRaw {
   text: string
   segmentIds: unknown[]
+  /** Optional so callers built before slide citations keep compiling. */
+  pageIds?: unknown[]
 }
 
 /** Validates the parsed summary JSON shape. Throws a Korean error when invalid. */
@@ -142,7 +215,8 @@ export function validateSummaryPayload(raw: unknown): SummaryClaimRaw[] {
       throw new Error('요약 API 응답 형식이 올바르지 않습니다.')
     }
     const segmentIds = Array.isArray(obj.segment_ids) ? obj.segment_ids : []
-    return { text: obj.text, segmentIds }
+    const pageIds = Array.isArray(obj.page_ids) ? obj.page_ids : []
+    return { text: obj.text, segmentIds, pageIds }
   })
 }
 
@@ -151,28 +225,41 @@ export interface MappedClaim {
   text: string
   /** Deduplicated segment DB ids in first-cited order. Empty when nothing valid was cited. */
   segmentDbIds: number[]
+  /** Deduplicated page DB ids in first-cited order. Empty when nothing valid was cited. */
+  pageDbIds: number[]
 }
 
 /**
- * Translates model segment numbers back to DB ids: drops duplicates, discards
- * ids outside 1..N, and leaves zero-citation claims empty (the pipeline stores
- * those as unsupported without sending them to verification).
+ * Translates model segment/page numbers back to DB ids: drops duplicates,
+ * discards numbers outside 1..N (1..M for pages), and leaves zero-citation
+ * claims empty (the pipeline stores those as unsupported without sending them
+ * to verification).
  */
 export function mapSummaryClaims(
   claims: SummaryClaimRaw[],
   idByNumber: Map<number, number>,
+  pageIdByNumber: Map<number, number> = new Map(),
 ): MappedClaim[] {
   return claims.map((claim, idx) => {
-    const seen = new Set<number>()
+    const seenSegments = new Set<number>()
     const segmentDbIds: number[] = []
     for (const rawId of claim.segmentIds) {
       if (typeof rawId !== 'number' || !Number.isInteger(rawId)) continue
       const dbId = idByNumber.get(rawId)
-      if (dbId === undefined || seen.has(dbId)) continue
-      seen.add(dbId)
+      if (dbId === undefined || seenSegments.has(dbId)) continue
+      seenSegments.add(dbId)
       segmentDbIds.push(dbId)
     }
-    return { idx, text: claim.text, segmentDbIds }
+    const seenPages = new Set<number>()
+    const pageDbIds: number[] = []
+    for (const rawId of claim.pageIds ?? []) {
+      if (typeof rawId !== 'number' || !Number.isInteger(rawId)) continue
+      const dbId = pageIdByNumber.get(rawId)
+      if (dbId === undefined || seenPages.has(dbId)) continue
+      seenPages.add(dbId)
+      pageDbIds.push(dbId)
+    }
+    return { idx, text: claim.text, segmentDbIds, pageDbIds }
   })
 }
 
@@ -181,8 +268,8 @@ export function mapSummaryClaims(
 // ---------------------------------------------------------------------------
 
 export const VERIFY_SYSTEM_PROMPT =
-  'You are a strict fact checker. For each claim, decide if it is fully supported by ONLY its cited segments.\n' +
-  'Be strict: any added fact, number, causal link, or generalization not stated in the cited segments means supported=false.\n' +
+  'You are a strict fact checker. For each claim, decide if it is fully supported by ONLY its cited evidence (transcript segments and/or slide pages).\n' +
+  'Be strict: any added fact, number, causal link, or generalization not stated in the cited evidence means supported=false.\n' +
   'Transcripts are speech-recognition output: English technical terms may be spelled in Korean phonetics ' +
   '(e.g. 히든 레이어 = hidden layer, 백프로퍼게이션 = backpropagation). ' +
   'Treat these as the same term, not as a mismatch.\n' +
@@ -211,7 +298,20 @@ export const VERIFY_SCHEMA = {
   additionalProperties: false,
 } as const
 
-/** One claim sent to verification, with ONLY the text of its cited segments. */
+/**
+ * Labels one cited transcript segment for the verification prompt so the
+ * checker can tell evidence kinds apart.
+ */
+export function formatTranscriptEvidence(startMs: number, text: string): string {
+  return `[transcript ${formatHms(startMs)}] ${text}`
+}
+
+/** Labels one cited slide page for the verification prompt. */
+export function formatSlideEvidence(pageNo: number, text: string): string {
+  return `[slide p.${pageNo}] ${text}`
+}
+
+/** One claim sent to verification, with ONLY its cited evidence lines. */
 export interface VerifyItem {
   claimIdx: number
   text: string
@@ -223,7 +323,7 @@ export function buildVerifyMessages(batch: VerifyItem[]): ChatMessage[] {
   const lines: string[] = []
   for (const item of batch) {
     lines.push(`Claim ${item.claimIdx}: ${item.text}`)
-    lines.push('Cited segments:')
+    lines.push('Cited evidence:')
     for (const text of item.citedTexts) {
       lines.push(`- ${text}`)
     }

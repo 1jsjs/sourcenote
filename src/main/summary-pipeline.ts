@@ -4,6 +4,7 @@ import {
   createSummary,
   getLatestSummary,
   insertClaimsWithCitations,
+  listNotePages,
   listNoteSegments,
   setClaimVerdict,
   setSummaryStatus,
@@ -14,9 +15,13 @@ import {
   buildSummaryMessages,
   buildVerifyMessages,
   DEFAULT_SUMMARY_MODEL,
+  formatSlideEvidence,
+  formatTranscriptEvidence,
   idByNumberMap,
   mapSummaryClaims,
+  numberPages,
   numberSegments,
+  pageIdByNumberMap,
   splitBatches,
   SUMMARY_SCHEMA,
   SUMMARY_SCHEMA_NAME,
@@ -30,9 +35,10 @@ import {
 import type { MetaApi } from './meta-api'
 
 /**
- * Stage-2 pipeline: note segments -> cited summary claims -> per-claim
- * verification against ONLY the cited segments. Unsupported sentences are
- * never shown as fact; they are stored with verdict 'unsupported'.
+ * Summary pipeline: note segments and slide pages -> cited summary claims ->
+ * per-claim verification against ONLY the cited evidence. Unsupported
+ * sentences are never shown as fact; they are stored with verdict
+ * 'unsupported'.
  */
 
 export interface SummaryPipelineDeps {
@@ -54,8 +60,9 @@ export async function runSummaryPipeline(
   const model = deps.model ?? DEFAULT_SUMMARY_MODEL
 
   const segments = listNoteSegments(db, noteId)
-  if (segments.length === 0) {
-    throw new Error('요약할 전사 구간이 없습니다')
+  const pages = listNotePages(db, noteId)
+  if (segments.length === 0 && pages.length === 0) {
+    throw new Error('요약할 자료가 없습니다')
   }
 
   const summary = createSummary(db, noteId, model)
@@ -67,34 +74,51 @@ export async function runSummaryPipeline(
     // 1. Summarize with citations.
     report('summarizing')
     const numbered = numberSegments(segments)
+    const numberedPages = numberPages(pages)
     const byNumber = idByNumberMap(numbered)
+    const pageByNumber = pageIdByNumberMap(numberedPages)
     const summaryRaw = await metaApi.chat({
       model,
-      messages: buildSummaryMessages(numbered),
+      messages: buildSummaryMessages(numbered, numberedPages),
       responseFormat: { name: SUMMARY_SCHEMA_NAME, schema: SUMMARY_SCHEMA },
     })
-    const mapped = mapSummaryClaims(validateSummaryPayload(summaryRaw), byNumber)
+    const mapped = mapSummaryClaims(validateSummaryPayload(summaryRaw), byNumber, pageByNumber)
 
     // Zero-citation claims are stored as unsupported and skip verification.
     const toInsert: NewClaim[] = mapped.map((c) => ({
       idx: c.idx,
       text: c.text,
-      verdict: c.segmentDbIds.length === 0 ? 'unsupported' : ('pending' as const),
-      reason: c.segmentDbIds.length === 0 ? ZERO_CITATION_REASON : null,
+      verdict:
+        c.segmentDbIds.length === 0 && c.pageDbIds.length === 0
+          ? 'unsupported'
+          : ('pending' as const),
+      reason:
+        c.segmentDbIds.length === 0 && c.pageDbIds.length === 0 ? ZERO_CITATION_REASON : null,
       segmentIds: c.segmentDbIds,
+      pageIds: c.pageDbIds,
     }))
     const claimIds = insertClaimsWithCitations(db, summary.id, toInsert)
     const claimIdByIdx = new Map(mapped.map((c, i) => [c.idx, claimIds[i]]))
-    const textByDbId = new Map(segments.map((s) => [s.id, s.text]))
+    const segmentByDbId = new Map(segments.map((s) => [s.id, s]))
+    const pageByDbId = new Map(pages.map((p) => [p.id, p]))
 
-    // 2. Verify each cited claim against ONLY its cited segments, in batches.
+    // 2. Verify each cited claim against ONLY its cited evidence, in batches.
     report('verifying')
-    const verifiable = mapped.filter((c) => c.segmentDbIds.length > 0)
+    const verifiable = mapped.filter((c) => c.segmentDbIds.length + c.pageDbIds.length > 0)
     for (const batch of splitBatches(verifiable)) {
       const items: VerifyItem[] = batch.map((c) => ({
         claimIdx: c.idx,
         text: c.text,
-        citedTexts: c.segmentDbIds.map((id) => textByDbId.get(id) ?? ''),
+        citedTexts: [
+          ...c.segmentDbIds.map((id) => {
+            const s = segmentByDbId.get(id)
+            return formatTranscriptEvidence(s?.startMs ?? 0, s?.text ?? '')
+          }),
+          ...c.pageDbIds.map((id) => {
+            const p = pageByDbId.get(id)
+            return formatSlideEvidence(p?.pageNo ?? 0, p?.text ?? '')
+          }),
+        ],
       }))
       const verifyRaw = await metaApi.chat({
         model,
