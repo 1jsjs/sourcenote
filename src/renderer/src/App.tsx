@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Note, ProgressEvent, Segment, Source, SourceStatus } from '../../shared/types'
 
-const BUDGET_CAP = 140
-
 const STATUS_LABEL: Record<SourceStatus, string> = {
   pending: '대기',
   converting: '변환 중',
@@ -25,7 +23,7 @@ export default function App() {
   const [selectedNoteId, setSelectedNoteId] = useState<number | null>(null)
   const [sources, setSources] = useState<Source[]>([])
   const [segmentsBySource, setSegmentsBySource] = useState<Record<number, Segment[]>>({})
-  const [spend, setSpend] = useState(0)
+  const [spend, setSpend] = useState({ spentUsd: 0, capUsd: 100 })
   const [progressBySource, setProgressBySource] = useState<Record<number, ProgressEvent>>({})
   const [newTitle, setNewTitle] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -106,7 +104,7 @@ export default function App() {
       <header className="header">
         <h1>Sourcenote</h1>
         <span className="spend">
-          ${spend.toFixed(4)} / ${BUDGET_CAP}
+          ${spend.spentUsd.toFixed(4)} / ${spend.capUsd}
         </span>
       </header>
 

@@ -273,7 +273,7 @@ describe('meta-api transcribeChunk', () => {
 
   it('never calls fetch when the budget is already exhausted', async () => {
     const { deps, captured, ledger } = makeDeps(tmpDir)
-    ledger.record({ kind: 'chat', model: 'm', usd: 140 })
+    ledger.record({ kind: 'chat', model: 'm', usd: 1000 })
     const api = createMetaApi(deps)
     await expect(
       api.transcribeChunk({ chunkPath, chunkDurationMs: 570_000 }),

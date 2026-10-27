@@ -5,7 +5,18 @@ import path from 'node:path'
 // Pricing (USD). Keep in sync with Meta API pricing.
 // ---------------------------------------------------------------------------
 
-export const BUDGET_CAP_USD = 140
+/**
+ * Hard cap for this app's own API spend. Defaults below the $150 hackathon
+ * credit because Muse Code (used for development) draws from the same credit
+ * and this ledger cannot see it. Override with SOURCENOTE_BUDGET_CAP_USD.
+ */
+export const DEFAULT_BUDGET_CAP_USD = 100
+
+export function budgetCapUsd(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.SOURCENOTE_BUDGET_CAP_USD
+  const n = raw === undefined ? NaN : Number(raw)
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_BUDGET_CAP_USD
+}
 
 export interface ChatPrices {
   inputPer1M: number
@@ -72,22 +83,28 @@ export function estimateTranscribeCostUsd(chunkDurationMs: number): number {
 export class BudgetExceededError extends Error {
   readonly totalUsd: number
   readonly attemptedUsd: number
+  readonly capUsd: number
 
-  constructor(totalUsd: number, attemptedUsd: number) {
+  constructor(totalUsd: number, attemptedUsd: number, capUsd: number) {
     super(
-      `예산 한도($${BUDGET_CAP_USD})에 도달해 호출을 막았습니다 ` +
+      `예산 한도($${capUsd})에 도달해 호출을 막았습니다 ` +
         `(현재 사용 $${totalUsd.toFixed(4)}, 예상 $${attemptedUsd.toFixed(4)})`,
     )
     this.name = 'BudgetExceededError'
     this.totalUsd = totalUsd
     this.attemptedUsd = attemptedUsd
+    this.capUsd = capUsd
   }
 }
 
 /** Pure cap check. Throws BudgetExceededError at or over the cap. */
-export function assertCanSpend(totalUsd: number, estimatedUsd: number): void {
-  if (totalUsd >= BUDGET_CAP_USD || totalUsd + estimatedUsd > BUDGET_CAP_USD) {
-    throw new BudgetExceededError(totalUsd, estimatedUsd)
+export function assertCanSpend(
+  totalUsd: number,
+  estimatedUsd: number,
+  capUsd: number = budgetCapUsd(),
+): void {
+  if (totalUsd >= capUsd || totalUsd + estimatedUsd > capUsd) {
+    throw new BudgetExceededError(totalUsd, estimatedUsd, capUsd)
   }
 }
 

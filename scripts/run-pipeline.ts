@@ -7,7 +7,7 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
-import { LedgerStore } from '../src/main/budget'
+import { budgetCapUsd, LedgerStore } from '../src/main/budget'
 import {
   createNote,
   createSource,
@@ -89,7 +89,7 @@ async function main(): Promise<void> {
     console.log(`[${formatHms(seg.start_ms)}–${formatHms(seg.end_ms)}] ${seg.text}`)
   }
   console.log(`\n총 ${segments.length}개 세그먼트`)
-  console.log(`누적 사용액: $${ledger.totalUsd.toFixed(4)} / $140`)
+  console.log(`누적 사용액: $${ledger.totalUsd.toFixed(4)} / $${budgetCapUsd()}`)
 }
 
 main().catch((err) => {

@@ -47,10 +47,10 @@ Other scripts: `npm test` (vitest), `npm run typecheck`, `npm run build`.
 ## Budget guard
 
 Every call to `api.meta.ai` goes through a single module that checks a
-conservative estimate against a **$140 cap** before the request and records the
+conservative estimate against a **$100 cap** (override with `SOURCENOTE_BUDGET_CAP_USD`) before the request and records the
 actual billed amount after it. Usage is persisted to `usage-ledger.json` in the
 app data directory; once the cap is reached, calls are blocked locally. The
-header shows current spend (`$x.xxxx / $140`).
+header shows current spend (`$x.xxxx / $100`).
 
 ## Data
 

@@ -5,7 +5,7 @@ import path from 'node:path'
 // before any module that depends on it is evaluated.
 import './env'
 
-import { LedgerStore } from './budget'
+import { budgetCapUsd, LedgerStore } from './budget'
 import {
   createNote,
   createSource,
@@ -50,7 +50,7 @@ function registerIpc(getWindow: () => BrowserWindow | null): void {
     typeof sourceId === 'number' ? listSegments(db, sourceId) : [],
   )
 
-  ipcMain.handle('budget:getSpend', () => ledger.totalUsd)
+  ipcMain.handle('budget:getSpend', () => ({ spentUsd: ledger.totalUsd, capUsd: budgetCapUsd() }))
 
   ipcMain.handle('sources:addAudio', async (_e, noteId: unknown) => {
     if (typeof noteId !== 'number') return null

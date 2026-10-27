@@ -50,6 +50,6 @@ export interface SourcenoteApi {
   /** Opens a file dialog, registers the source and starts the pipeline. */
   addAudioSource(noteId: number): Promise<Source | null>
   listSegments(sourceId: number): Promise<Segment[]>
-  getSpend(): Promise<number>
+  getSpend(): Promise<{ spentUsd: number; capUsd: number }>
   onProgress(cb: (event: ProgressEvent) => void): () => void
 }

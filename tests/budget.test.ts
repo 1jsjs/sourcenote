@@ -4,7 +4,8 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   assertCanSpend,
-  BUDGET_CAP_USD,
+  budgetCapUsd,
+  DEFAULT_BUDGET_CAP_USD,
   BudgetExceededError,
   chatCostUsd,
   estimateChatCostUsd,
@@ -55,30 +56,47 @@ describe('transcribeCostUsd', () => {
   })
 })
 
-describe('assertCanSpend (cap $140)', () => {
+describe('budgetCapUsd', () => {
+  it('defaults to $100', () => {
+    expect(DEFAULT_BUDGET_CAP_USD).toBe(100)
+    expect(budgetCapUsd({})).toBe(100)
+  })
+
+  it('reads SOURCENOTE_BUDGET_CAP_USD', () => {
+    expect(budgetCapUsd({ SOURCENOTE_BUDGET_CAP_USD: '120' })).toBe(120)
+  })
+
+  it('ignores invalid or non-positive overrides', () => {
+    expect(budgetCapUsd({ SOURCENOTE_BUDGET_CAP_USD: 'abc' })).toBe(100)
+    expect(budgetCapUsd({ SOURCENOTE_BUDGET_CAP_USD: '0' })).toBe(100)
+    expect(budgetCapUsd({ SOURCENOTE_BUDGET_CAP_USD: '-5' })).toBe(100)
+  })
+})
+
+describe('assertCanSpend (explicit cap $140)', () => {
   it('allows spend below the cap', () => {
-    expect(() => assertCanSpend(10, 5)).not.toThrow()
+    expect(() => assertCanSpend(10, 5, 140)).not.toThrow()
   })
 
   it('blocks when the total is AT the cap', () => {
-    expect(() => assertCanSpend(BUDGET_CAP_USD, 0.001)).toThrow(BudgetExceededError)
+    expect(() => assertCanSpend(140, 0.001, 140)).toThrow(BudgetExceededError)
   })
 
   it('blocks when the total is OVER the cap', () => {
-    expect(() => assertCanSpend(145, 0.001)).toThrow(BudgetExceededError)
+    expect(() => assertCanSpend(145, 0.001, 140)).toThrow(BudgetExceededError)
   })
 
   it('blocks an estimate that would cross the cap', () => {
-    expect(() => assertCanSpend(139.999, 0.002)).toThrow(BudgetExceededError)
+    expect(() => assertCanSpend(139.999, 0.002, 140)).toThrow(BudgetExceededError)
   })
 
   it('allows an estimate that lands exactly under the cap', () => {
-    expect(() => assertCanSpend(139.998, 0.002)).not.toThrow()
+    expect(() => assertCanSpend(139.998, 0.002, 140)).not.toThrow()
   })
 
   it('error carries Korean message and amounts', () => {
     try {
-      assertCanSpend(140, 1)
+      assertCanSpend(140, 1, 140)
       expect.unreachable()
     } catch (err) {
       expect(err).toBeInstanceOf(BudgetExceededError)
@@ -184,7 +202,7 @@ describe('LedgerStore', () => {
   it('enforces the cap through assertCanSpend', () => {
     const file = path.join(dir, 'usage-ledger.json')
     const store = new LedgerStore(file)
-    store.record({ kind: 'chat', model: 'm', usd: BUDGET_CAP_USD })
+    store.record({ kind: 'chat', model: 'm', usd: DEFAULT_BUDGET_CAP_USD })
     expect(() => store.assertCanSpend(0.001)).toThrow(BudgetExceededError)
   })
 })
