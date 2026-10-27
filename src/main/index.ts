@@ -19,6 +19,7 @@ import {
 import {
   createNote,
   createSource,
+  deleteNote,
   getLatestCheck,
   getLatestSummary,
   getSource,
@@ -27,6 +28,8 @@ import {
   listSegments,
   listSources,
   openDb,
+  removeNoteMedia,
+  renameNote,
 } from './db'
 import { langMsg } from './lang'
 import { mediaContentTypeForPath, parseMediaSourceUrl, parseRangeHeader } from './media'
@@ -194,6 +197,27 @@ function registerIpc(getWindow: () => BrowserWindow | null): void {
     const fallback = langMsg(currentLanguage(), '새 노트', 'New note')
     const t = typeof title === 'string' && title.trim().length > 0 ? title.trim() : fallback
     return createNote(db, t)
+  })
+
+  ipcMain.handle('notes:rename', (_e, id: unknown, title: unknown) => {
+    if (typeof id !== 'number') {
+      throw new Error(langMsg(currentLanguage(), '노트를 찾을 수 없습니다.', 'Note not found.'))
+    }
+    if (typeof title !== 'string') {
+      throw new Error(langMsg(currentLanguage(), '노트 제목을 입력하세요', 'Enter a note title'))
+    }
+    return renameNote(db, id, title, currentLanguage())
+  })
+
+  ipcMain.handle('notes:delete', (_e, id: unknown) => {
+    if (typeof id !== 'number') {
+      throw new Error(langMsg(currentLanguage(), '노트를 찾을 수 없습니다.', 'Note not found.'))
+    }
+    // DB rows go first in one transaction; converted chunk dirs afterwards.
+    // Original files (`sources.original_path`) are never touched.
+    const sourceIds = deleteNote(db, id, currentLanguage())
+    removeNoteMedia(dataDir, sourceIds)
+    return sourceIds
   })
 
   ipcMain.handle('sources:list', (_e, noteId: unknown) =>

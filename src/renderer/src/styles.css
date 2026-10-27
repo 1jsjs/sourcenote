@@ -129,6 +129,112 @@ button:hover {
   font-weight: 600;
 }
 
+.note-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+}
+
+.note-row .note-item {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-menu-btn {
+  display: none;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  padding: 4px 8px;
+  font-size: 14px;
+  color: #555;
+}
+
+.note-row:hover .note-menu-btn,
+.note-row.selected .note-menu-btn,
+.note-row:focus-within .note-menu-btn {
+  display: inline-block;
+}
+
+.note-rename {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid #1a56db;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.note-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
+  background: #ffffff;
+  border: 1px solid #e0e0e2;
+  border-radius: 6px;
+  padding: 4px;
+}
+
+.note-menu button {
+  border: none;
+  text-align: left;
+  background: transparent;
+}
+
+.note-menu button.danger {
+  color: #b3261e;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.modal {
+  max-width: 420px;
+  margin: 0 16px;
+  background: #ffffff;
+  border: 1px solid #e4e4e8;
+  border-radius: 8px;
+  padding: 16px 20px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.modal-text {
+  margin: 0;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+button.danger-btn {
+  background: #b3261e;
+  border-color: #b3261e;
+  color: #ffffff;
+}
+
+button.danger-btn:hover {
+  background: #8f1d17;
+}
+
 .lang-toggle {
   display: flex;
   border: 1px solid #d0d0d4;

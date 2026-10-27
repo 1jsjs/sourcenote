@@ -69,6 +69,12 @@ export const messages = {
     emptyHint: 'API 키 없이 샘플 노트로 바로 살펴보세요.',
     importing: '가져오는 중…',
     noSamples: '사용 가능한 샘플이 없습니다.',
+    noteMenu: '노트 메뉴',
+    rename: '이름 바꾸기',
+    delete: '삭제',
+    cancel: '취소',
+    deleteConfirm:
+      '"{title}" 노트를 삭제할까요? 전사·요약·검증 결과가 함께 지워지고 원본 파일은 그대로 남습니다.',
   },
   en: {
     appTitle: 'Sourcenote',
@@ -131,6 +137,12 @@ export const messages = {
     emptyHint: 'Explore a sample note right away — no API key needed.',
     importing: 'Importing…',
     noSamples: 'No samples available.',
+    noteMenu: 'Note menu',
+    rename: 'Rename',
+    delete: 'Delete',
+    cancel: 'Cancel',
+    deleteConfirm:
+      'Delete "{title}"? Its transcript, summaries and checks are removed; your original files stay where they are.',
   },
 }
 

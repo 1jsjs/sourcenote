@@ -14,6 +14,8 @@ import type {
 const api: SourcenoteApi = {
   listNotes: () => ipcRenderer.invoke('notes:list'),
   createNote: (title) => ipcRenderer.invoke('notes:create', title),
+  renameNote: (id, title) => ipcRenderer.invoke('notes:rename', id, title),
+  deleteNote: (id) => ipcRenderer.invoke('notes:delete', id),
   listSources: (noteId) => ipcRenderer.invoke('sources:list', noteId),
   addAudioSource: (noteId) => ipcRenderer.invoke('sources:addAudio', noteId),
   addPdfSource: (noteId): Promise<Source | null> => ipcRenderer.invoke('sources:addPdf', noteId),

@@ -1,3 +1,5 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import type {
   AppLanguage,
@@ -14,6 +16,7 @@ import type {
   SummaryStatus,
 } from '../shared/types'
 import { isAppLanguage } from '../shared/types'
+import { langMsg } from './lang'
 
 /**
  * SQLite layer backed by Node's built-in `node:sqlite` (DatabaseSync).
@@ -165,6 +168,120 @@ export function listNotes(db: DatabaseSync): Note[] {
 export function getNote(db: DatabaseSync, id: number): Note | null {
   const row = db.prepare('SELECT * FROM notes WHERE id = ?').get(id)
   return (row as unknown as Note) ?? null
+}
+
+/** Maximum note title length (in characters). */
+export const MAX_NOTE_TITLE_LENGTH = 200
+
+/** Renames a note. The title is trimmed; empty and overlong titles throw. */
+export function renameNote(
+  db: DatabaseSync,
+  id: number,
+  title: string,
+  language: AppLanguage = 'ko',
+): Note {
+  const trimmed = title.trim()
+  if (trimmed.length === 0) {
+    throw new Error(langMsg(language, '노트 제목을 입력하세요', 'Enter a note title'))
+  }
+  if (trimmed.length > MAX_NOTE_TITLE_LENGTH) {
+    throw new Error(
+      langMsg(
+        language,
+        '노트 제목은 200자를 넘을 수 없습니다',
+        'Note title must be 200 characters or fewer',
+      ),
+    )
+  }
+  const note = getNote(db, id)
+  if (!note) {
+    throw new Error(langMsg(language, '노트를 찾을 수 없습니다.', 'Note not found.'))
+  }
+  db.prepare('UPDATE notes SET title = ? WHERE id = ?').run(trimmed, id)
+  return { ...note, title: trimmed }
+}
+
+/** True while a note still has work in flight (ingest or summarize/verify). */
+function isNoteProcessing(db: DatabaseSync, noteId: number): boolean {
+  const busySource = db
+    .prepare(
+      "SELECT 1 FROM sources WHERE note_id = ? AND status IN ('converting', 'transcribing') LIMIT 1",
+    )
+    .get(noteId)
+  if (busySource) return true
+  // Only the latest summary/check of each kind can be in flight; older rows
+  // keep their terminal status.
+  for (const kind of ['auto', 'check'] as const) {
+    const latest = db
+      .prepare('SELECT status FROM summaries WHERE note_id = ? AND kind = ? ORDER BY id DESC LIMIT 1')
+      .get(noteId, kind) as unknown as { status: string } | null
+    if (latest && (latest.status === 'summarizing' || latest.status === 'verifying')) return true
+  }
+  return false
+}
+
+/**
+ * Deletes a note and every row the app created for it (citations, claims,
+ * summaries, corrections, segments, pages, sources, then the note) in one
+ * transaction. Returns the deleted source ids so the caller can remove
+ * their converted media dirs. Unknown id is a no-op returning [].
+ * Refuses while ingest/summary work is still in flight.
+ */
+export function deleteNote(
+  db: DatabaseSync,
+  id: number,
+  language: AppLanguage = 'ko',
+): number[] {
+  if (!getNote(db, id)) return []
+  if (isNoteProcessing(db, id)) {
+    throw new Error(
+      langMsg(language, '처리 중인 노트는 삭제할 수 없습니다', 'This note is still being processed'),
+    )
+  }
+  const sourceIds = (
+    db.prepare('SELECT id FROM sources WHERE note_id = ?').all(id) as unknown as Array<{
+      id: number
+    }>
+  ).map((row) => row.id)
+  db.exec('BEGIN')
+  try {
+    const claimsOfNote =
+      'SELECT c.id FROM claims c JOIN summaries s ON s.id = c.summary_id WHERE s.note_id = ?'
+    const sourcesOfNote = 'SELECT id FROM sources WHERE note_id = ?'
+    db.prepare(`DELETE FROM claim_citations WHERE claim_id IN (${claimsOfNote})`).run(id)
+    db.prepare(`DELETE FROM claim_page_citations WHERE claim_id IN (${claimsOfNote})`).run(id)
+    db.prepare('DELETE FROM claims WHERE summary_id IN (SELECT id FROM summaries WHERE note_id = ?)').run(id)
+    db.prepare('DELETE FROM summaries WHERE note_id = ?').run(id)
+    db.prepare('DELETE FROM corrections WHERE note_id = ?').run(id)
+    db.prepare(`DELETE FROM segments WHERE source_id IN (${sourcesOfNote})`).run(id)
+    db.prepare(`DELETE FROM pages WHERE source_id IN (${sourcesOfNote})`).run(id)
+    db.prepare('DELETE FROM sources WHERE note_id = ?').run(id)
+    db.prepare('DELETE FROM notes WHERE id = ?').run(id)
+    db.exec('COMMIT')
+  } catch (err) {
+    try {
+      db.exec('ROLLBACK')
+    } catch {
+      // Already rolled back; fall through to the original error.
+    }
+    throw err
+  }
+  return sourceIds
+}
+
+/**
+ * Removes `<dataDir>/media/<sourceId>/` dirs created by the audio pipeline.
+ * The resolved target must stay inside `<dataDir>/media`, so a crafted id
+ * can never escape; original files and `<dataDir>/samples` are untouched.
+ */
+export function removeNoteMedia(dataDir: string, sourceIds: number[]): void {
+  const mediaRoot = path.resolve(dataDir, 'media')
+  for (const sourceId of sourceIds) {
+    const target = path.resolve(mediaRoot, String(sourceId))
+    const relative = path.relative(mediaRoot, target)
+    if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) continue
+    fs.rmSync(target, { recursive: true, force: true })
+  }
 }
 
 // ---------------------------------------------------------------------------

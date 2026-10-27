@@ -114,6 +114,11 @@ export default function App() {
   const [samples, setSamples] = useState<SampleInfo[]>([])
   const [showSamples, setShowSamples] = useState(false)
   const [importingSample, setImportingSample] = useState(false)
+  const [menuOpenId, setMenuOpenId] = useState<number | null>(null)
+  const [renamingId, setRenamingId] = useState<number | null>(null)
+  const [renameText, setRenameText] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState<Note | null>(null)
+  const renameDone = useRef(false)
   const [slideSel, setSlideSel] = useState<{
     sourceId: number
     pageNo: number
@@ -264,6 +269,52 @@ export default function App() {
     },
     [],
   )
+
+  const handleRenameStart = (note: Note): void => {
+    renameDone.current = false
+    setRenameText(note.title)
+    setRenamingId(note.id)
+    setMenuOpenId(null)
+  }
+
+  const handleRenameCancel = (): void => {
+    renameDone.current = true
+    setRenamingId(null)
+  }
+
+  const handleRenameSave = async (id: number): Promise<void> => {
+    // Enter and blur can fire for the same edit; save only once.
+    if (renameDone.current) return
+    renameDone.current = true
+    setRenamingId(null)
+    setError(null)
+    try {
+      const updated = await window.sourcenote.renameNote(id, renameText)
+      setNotes((prev) => prev.map((n) => (n.id === id ? updated : n)))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const handleDeleteConfirm = async (): Promise<void> => {
+    if (deleteTarget === null) return
+    const id = deleteTarget.id
+    setError(null)
+    try {
+      await window.sourcenote.deleteNote(id)
+      const idx = notes.findIndex((n) => n.id === id)
+      setNotes(notes.filter((n) => n.id !== id))
+      if (selectedNoteId === id) {
+        // Select the next note, or none (empty state) when it was the last.
+        const next = notes[idx + 1] ?? notes[idx - 1] ?? null
+        setSelectedNoteId(next ? next.id : null)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setDeleteTarget(null)
+    }
+  }
 
   const handleCreateNote = async (): Promise<void> => {
     const title = newTitle.trim()
@@ -500,16 +551,65 @@ export default function App() {
             <button onClick={() => void handleCreateNote()}>{t(lang, 'newNote')}</button>
           </div>
           <ul className="note-list">
-            {notes.map((note) => (
-              <li key={note.id}>
-                <button
-                  className={note.id === selectedNoteId ? 'note-item selected' : 'note-item'}
-                  onClick={() => setSelectedNoteId(note.id)}
-                >
-                  {note.title}
-                </button>
-              </li>
-            ))}
+            {notes.map((note) => {
+              const selected = note.id === selectedNoteId
+              return (
+                <li key={note.id} className={selected ? 'note-row selected' : 'note-row'}>
+                  {renamingId === note.id ? (
+                    <input
+                      className="note-rename"
+                      value={renameText}
+                      autoFocus
+                      onChange={(e) => setRenameText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') void handleRenameSave(note.id)
+                        else if (e.key === 'Escape') handleRenameCancel()
+                      }}
+                      onBlur={() => void handleRenameSave(note.id)}
+                    />
+                  ) : (
+                    <button
+                      className={selected ? 'note-item selected' : 'note-item'}
+                      onClick={() => {
+                        setSelectedNoteId(note.id)
+                        setMenuOpenId(null)
+                      }}
+                    >
+                      {note.title}
+                    </button>
+                  )}
+                  {renamingId !== note.id && (
+                    <button
+                      className="note-menu-btn"
+                      aria-label={t(lang, 'noteMenu')}
+                      aria-haspopup="menu"
+                      onClick={() =>
+                        setMenuOpenId((prev) => (prev === note.id ? null : note.id))
+                      }
+                    >
+                      ⋯
+                    </button>
+                  )}
+                  {menuOpenId === note.id && (
+                    <div className="note-menu" role="menu">
+                      <button role="menuitem" onClick={() => handleRenameStart(note)}>
+                        {t(lang, 'rename')}
+                      </button>
+                      <button
+                        role="menuitem"
+                        className="danger"
+                        onClick={() => {
+                          setDeleteTarget(note)
+                          setMenuOpenId(null)
+                        }}
+                      >
+                        {t(lang, 'delete')}
+                      </button>
+                    </div>
+                  )}
+                </li>
+              )
+            })}
             {notes.length === 0 && <li className="empty">{t(lang, 'noNotes')}</li>}
           </ul>
           <div className="samples">
@@ -763,6 +863,21 @@ export default function App() {
           />
         )}
       </div>
+      {deleteTarget !== null && (
+        <div className="modal-backdrop">
+          <div className="modal" role="dialog" aria-modal="true">
+            <p className="modal-text">
+              {t(lang, 'deleteConfirm', { title: deleteTarget.title })}
+            </p>
+            <div className="modal-actions">
+              <button onClick={() => setDeleteTarget(null)}>{t(lang, 'cancel')}</button>
+              <button className="danger-btn" onClick={() => void handleDeleteConfirm()}>
+                {t(lang, 'delete')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

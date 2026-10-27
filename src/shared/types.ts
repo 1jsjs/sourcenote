@@ -146,6 +146,10 @@ export interface SummaryProgressEvent {
 export interface SourcenoteApi {
   listNotes(): Promise<Note[]>
   createNote(title: string): Promise<Note>
+  /** Renames a note (title is trimmed, max 200 chars). */
+  renameNote(id: number, title: string): Promise<Note>
+  /** Deletes a note with all its data; returns the deleted source ids. */
+  deleteNote(id: number): Promise<number[]>
   listSources(noteId: number): Promise<Source[]>
   /** Opens a file dialog, registers the source and starts the pipeline. */
   addAudioSource(noteId: number): Promise<Source | null>
