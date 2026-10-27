@@ -20,6 +20,7 @@ import {
   createNote,
   createSource,
   deleteNote,
+  deleteSourceSegments,
   getLatestCheck,
   getLatestSummary,
   getSource,
@@ -31,6 +32,7 @@ import {
   removeNoteMedia,
   renameNote,
 } from './db'
+import { isFakeApiEnabled } from './fake-api'
 import { langMsg } from './lang'
 import { mediaContentTypeForPath, parseMediaSourceUrl, parseRangeHeader } from './media'
 import { createMetaApi } from './meta-api'
@@ -43,6 +45,7 @@ import { runSummaryPipeline } from './summary-pipeline'
 import { dbFilePath, ensureDataDir, ledgerFilePath, mediaDirPath, settingsFilePath } from './paths'
 import type {
   AppLanguage,
+  CheckProgressEvent,
   CorrectionProgressEvent,
   ProgressEvent,
   Source,
@@ -167,7 +170,13 @@ function sendCorrectionProgress(win: BrowserWindow | null, event: CorrectionProg
   win?.webContents.send('correction:progress', event)
 }
 
+function sendCheckProgress(win: BrowserWindow | null, event: CheckProgressEvent): void {
+  win?.webContents.send('check:progress', event)
+}
+
 function registerIpc(getWindow: () => BrowserWindow | null): void {
+  ipcMain.handle('app:info', () => ({ fakeApi: isFakeApiEnabled(), version: app.getVersion() }))
+
   ipcMain.handle('notes:list', () => listNotes(db))
 
   ipcMain.handle('settings:get', () => loadSettings(settingsPath))
@@ -331,6 +340,62 @@ function registerIpc(getWindow: () => BrowserWindow | null): void {
     return { added, ignored: ignored.map((filePath) => path.basename(filePath)) }
   })
 
+  /**
+   * Re-runs the pipeline for one errored (or stale) source. Refuses while
+   * that source is still converting/transcribing.
+   */
+  ipcMain.handle('sources:retry', (_e, sourceId: unknown) => {
+    if (typeof sourceId !== 'number') {
+      throw new Error(langMsg(currentLanguage(), '소스를 찾을 수 없습니다.', 'Source not found.'))
+    }
+    const source = getSource(db, sourceId)
+    if (!source) {
+      throw new Error(langMsg(currentLanguage(), '소스를 찾을 수 없습니다.', 'Source not found.'))
+    }
+    if (source.status === 'converting' || source.status === 'transcribing') {
+      throw new Error(
+        langMsg(
+          currentLanguage(),
+          '진행 중인 작업이 끝나면 다시 누를 수 있어요.',
+          'Available when the current run finishes.',
+        ),
+      )
+    }
+    if (source.kind === 'pdf') {
+      void ingestPdfSource(db, source.id)
+        .then(() => {
+          sendProgress(getWindow(), { sourceId: source.id, stage: 'done', chunk: 1, totalChunks: 1 })
+        })
+        .catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err)
+          sendProgress(getWindow(), {
+            sourceId: source.id,
+            stage: 'error',
+            chunk: 0,
+            totalChunks: 0,
+            message,
+          })
+        })
+    } else {
+      // A retry must not duplicate transcript rows.
+      deleteSourceSegments(db, source.id)
+      void runAudioPipeline(
+        {
+          db,
+          metaApi,
+          mediaDir: mediaDirPath(dataDir),
+          onProgress: (event) => sendProgress(getWindow(), event),
+        },
+        source.id,
+      ).catch(() => {
+        // Status/message already stored on the source and sent via progress.
+      })
+    }
+    const updated = getSource(db, source.id)
+    if (!updated) throw new Error(langMsg(currentLanguage(), '소스를 찾을 수 없습니다.', 'Source not found.'))
+    return updated
+  })
+
   ipcMain.handle('budget:getSpend', () => ({ spentUsd: ledger.totalUsd, capUsd: budgetCapUsd() }))
 
   ipcMain.handle('summary:getLatest', (_e, noteId: unknown) =>
@@ -391,7 +456,16 @@ function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('check:run', (_e, noteId: unknown, text: unknown) => {
     if (typeof noteId !== 'number') throw new Error('노트를 찾을 수 없습니다.')
     if (typeof text !== 'string') throw new Error('검증할 문장이 없습니다.')
-    return runCheckPipeline({ db, metaApi, language: currentLanguage() }, noteId, text)
+    return runCheckPipeline(
+      {
+        db,
+        metaApi,
+        language: currentLanguage(),
+        onProgress: (event) => sendCheckProgress(getWindow(), event),
+      },
+      noteId,
+      text,
+    )
   })
 
   ipcMain.handle('check:getLatest', (_e, noteId: unknown) =>

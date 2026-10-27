@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AppLanguage } from '../../shared/types'
+import Button from './Button'
+import { PauseButtonIcon, PlayButtonIcon } from './icons'
 import { t } from './i18n'
 
 /** Short clock time: `12:34`, or `1:02:15` past an hour. */
@@ -10,23 +12,6 @@ export function formatHms(ms: number): string {
   const s = totalSec % 60
   const pad = (n: number): string => String(n).padStart(2, '0')
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`
-}
-
-function PlayIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-      <path d="M3.5 2.2v7.6L10 6 3.5 2.2z" fill="currentColor" />
-    </svg>
-  )
-}
-
-function PauseIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-      <rect x="3" y="2.2" width="2.2" height="7.6" rx="0.6" fill="currentColor" />
-      <rect x="6.8" y="2.2" width="2.2" height="7.6" rx="0.6" fill="currentColor" />
-    </svg>
-  )
 }
 
 interface AudioPlayerProps {
@@ -43,6 +28,8 @@ interface AudioPlayerProps {
 /**
  * Single lecture-audio player bar. The file is served by the main process
  * over `sourcenote-media://source/<id>` (with HTTP Range, so seeking works).
+ * While the media is loading/buffering the play button shows the spinner;
+ * a load error shows red text with the file name.
  */
 export default function AudioPlayer({
   lang,
@@ -54,14 +41,18 @@ export default function AudioPlayer({
 }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const [playing, setPlaying] = useState(false)
+  const [buffering, setBuffering] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [currentMs, setCurrentMs] = useState(0)
   const [durationMs, setDurationMs] = useState(0)
   const src = `sourcenote-media://source/${sourceId}`
 
-  // A new source starts stopped at 0:00.
+  // A new source starts stopped at 0:00 and loads again.
   useEffect(() => {
     setCurrentMs(0)
     setPlaying(false)
+    setBuffering(true)
+    setLoadError(false)
   }, [src])
 
   // Citation / timestamp clicks request seek + play from the parent.
@@ -94,10 +85,17 @@ export default function AudioPlayer({
   const maxSec = durationMs / 1000
   return (
     <div className="player" role="region" aria-label={t(lang, 'playerRegion')}>
-      <button onClick={toggle} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-        {playing ? <PauseIcon /> : <PlayIcon />}
+      <Button
+        size="sm"
+        variant="secondary"
+        icon={playing ? <PauseButtonIcon /> : <PlayButtonIcon />}
+        loading={buffering && !loadError}
+        onClick={toggle}
+        aria-label={playing ? t(lang, 'pause') : t(lang, 'play')}
+        title={playing ? t(lang, 'pause') : t(lang, 'play')}
+      >
         {playing ? t(lang, 'pause') : t(lang, 'play')}
-      </button>
+      </Button>
       <span className="player-name" title={sourceName}>
         {sourceName}
       </span>
@@ -114,6 +112,11 @@ export default function AudioPlayer({
         onChange={(e) => seek(Number(e.target.value))}
         aria-label={t(lang, 'seekLabel')}
       />
+      {loadError && (
+        <p className="audio-error" role="alert">
+          {t(lang, 'audioLoadError')} · {sourceName}
+        </p>
+      )}
       <audio
         ref={audioRef}
         src={src}
@@ -123,9 +126,21 @@ export default function AudioPlayer({
           onTimeUpdate(sourceId, el.currentTime * 1000)
         }}
         onLoadedMetadata={(e) => setDurationMs(e.currentTarget.duration * 1000)}
+        onLoadStart={() => {
+          setBuffering(true)
+          setLoadError(false)
+        }}
+        onWaiting={() => setBuffering(true)}
+        onCanPlay={() => setBuffering(false)}
+        onPlaying={() => setBuffering(false)}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
         onEnded={() => setPlaying(false)}
+        onError={() => {
+          setLoadError(true)
+          setBuffering(false)
+          setPlaying(false)
+        }}
       />
     </div>
   )

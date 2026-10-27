@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist/build/pdf.mjs'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import type { AppLanguage } from '../../shared/types'
+import Button from './Button'
+import { ChevronLeftIcon, ChevronRightIcon } from './icons'
 import { t } from './i18n'
 
 // pdf.js renders pages on a worker; Vite serves the bundled worker file.
@@ -30,14 +32,17 @@ export default function SlidePanel({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [paneWidth, setPaneWidth] = useState(0)
+  const [retryToken, setRetryToken] = useState(0)
 
   // Render at the pane width (times devicePixelRatio); re-render on resize.
   useEffect(() => {
     const el = wrapRef.current
     if (!el) return
+    // Ignore small width changes: rendering the slide can toggle the pane's
+    // scrollbar, which would otherwise trigger an endless re-render loop.
     const measure = (): void => {
       const w = el.clientWidth
-      if (w > 0) setPaneWidth(w)
+      if (w > 0) setPaneWidth((prev) => (Math.abs(w - prev) < 24 ? prev : w))
     }
     measure()
     const observer = new ResizeObserver(measure)
@@ -45,10 +50,14 @@ export default function SlidePanel({
     return () => observer.disconnect()
   }, [])
 
+  // Show the loading state only for a new page, not for resize re-renders.
+  useEffect(() => {
+    setLoading(true)
+  }, [sourceId, pageNo, retryToken])
+
   useEffect(() => {
     if (paneWidth <= 0) return
     let cancelled = false
-    setLoading(true)
     setError(null)
     // pdf.js 6 only accepts { url | data | range }; fetch the bytes through the
     // media protocol ourselves so no custom-scheme loader is involved.
@@ -93,7 +102,7 @@ export default function SlidePanel({
     return () => {
       cancelled = true
     }
-  }, [sourceId, pageNo, lang, paneWidth])
+  }, [sourceId, pageNo, lang, paneWidth, retryToken])
 
   return (
     <div className="slide-view" aria-label={t(lang, 'slideRegion')}>
@@ -106,20 +115,49 @@ export default function SlidePanel({
         </span>
       </div>
       <div ref={wrapRef}>
-        {loading && <p className="empty">{t(lang, 'slideLoading')}</p>}
-        {error !== null && <p className="source-error">{error}</p>}
-        <canvas ref={canvasRef} className="slide-canvas" />
+        {loading && (
+          <>
+            <div className="skeleton-page" aria-hidden="true" />
+            <p className="empty">{t(lang, 'slideRetryHint')}</p>
+          </>
+        )}
+        {error !== null && (
+          <>
+            <p className="empty">{error}</p>
+            <Button size="sm" variant="ghost" onClick={() => setRetryToken((n) => n + 1)}>
+              {t(lang, 'retry')}
+            </Button>
+          </>
+        )}
+        <canvas
+          ref={canvasRef}
+          className="slide-canvas"
+          style={loading || error !== null ? { display: 'none' } : undefined}
+        />
       </div>
       <footer className="slide-nav">
-        <button disabled={pageNo <= 1} onClick={() => onNavigate(pageNo - 1)}>
+        <Button
+          size="sm"
+          variant="secondary"
+          icon={<ChevronLeftIcon />}
+          disabled={pageNo <= 1}
+          onClick={() => onNavigate(pageNo - 1)}
+          aria-label={t(lang, 'prev')}
+          title={t(lang, 'prev')}
+        >
           {t(lang, 'prev')}
-        </button>
-        <button disabled={pageNo >= totalPages} onClick={() => onNavigate(pageNo + 1)}>
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          icon={<ChevronRightIcon />}
+          disabled={pageNo >= totalPages}
+          onClick={() => onNavigate(pageNo + 1)}
+          aria-label={t(lang, 'next')}
+          title={t(lang, 'next')}
+        >
           {t(lang, 'next')}
-        </button>
-        <span className="page-indicator">
-          p.{pageNo} / {totalPages}
-        </span>
+        </Button>
       </footer>
     </div>
   )

@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
-import type { AppLanguage, Summary } from '../shared/types'
+import type { AppLanguage, CheckProgressEvent, Summary } from '../shared/types'
 import {
   createSummary,
   getLatestCheck,
@@ -29,6 +29,7 @@ import {
   validateVerifyPayload,
   type VerifyItem,
 } from './grounding'
+import { splitSentences } from '../shared/sentences'
 import type { ChatMessage, MetaApi } from './meta-api'
 
 /**
@@ -103,16 +104,7 @@ export const CHECK_LOCATE_SCHEMA = {
  * Pure and unit-tested.
  */
 export function splitUserSentences(text: string, language: AppLanguage = 'ko'): string[] {
-  const sentences: string[] = []
-  for (const line of text.split('\n')) {
-    // A '.' between digits (3.14, 0.5) is a decimal point, not a sentence end.
-    const matches = line.match(/(?:\d\.\d|[^.?!])+(?:[.?!]+|$)/g)
-    if (!matches) continue
-    for (const m of matches) {
-      const trimmed = m.trim()
-      if (trimmed.length > 0) sentences.push(trimmed)
-    }
-  }
+  const sentences = splitSentences(text)
   if (sentences.length === 0) {
     throw new Error(langMsg(language, '검증할 문장이 없습니다.', 'No sentences to check'))
   }
@@ -227,6 +219,7 @@ export interface CheckPipelineDeps {
   metaApi: MetaApi
   model?: string
   language?: AppLanguage
+  onProgress?: (event: CheckProgressEvent) => void
 }
 
 function errorMessage(err: unknown): string {
@@ -238,9 +231,12 @@ export async function runCheckPipeline(
   noteId: number,
   notesText: string,
 ): Promise<Summary> {
-  const { db, metaApi } = deps
+  const { db, metaApi, onProgress } = deps
   const model = deps.model ?? DEFAULT_SUMMARY_MODEL
   const language: AppLanguage = deps.language ?? 'ko'
+  const report = (stage: CheckProgressEvent['stage'], message?: string): void => {
+    onProgress?.({ noteId, stage, message })
+  }
 
   const sentences = splitUserSentences(notesText, language)
   const segments = listNoteSegments(db, noteId)
@@ -252,6 +248,7 @@ export async function runCheckPipeline(
   const summary = createSummary(db, noteId, model, 'check', language)
   try {
     // 1. Locate the most relevant evidence per user sentence.
+    report('locating')
     const numbered = numberSegments(segments)
     const numberedPages = numberPages(pages)
     const locateRaw = await metaApi.chat({
@@ -292,6 +289,7 @@ export async function runCheckPipeline(
     const pageByDbId = new Map(pages.map((p) => [p.id, p]))
 
     // 2. Verify each cited sentence against ONLY its cited evidence, in batches.
+    report('verifying')
     const verifiable = mapped.filter((c) => c.segmentDbIds.length + c.pageDbIds.length > 0)
     for (const batch of splitBatches(verifiable)) {
       const items: VerifyItem[] = batch.map((c) => ({
@@ -326,12 +324,14 @@ export async function runCheckPipeline(
     }
 
     setSummaryStatus(db, summary.id, 'done')
+    report('done')
     const done = getLatestCheck(db, noteId)
     if (!done) throw new Error('검증 결과를 찾을 수 없습니다.')
     return done
   } catch (err) {
     const message = errorMessage(err)
     setSummaryStatus(db, summary.id, 'error', message)
+    report('error', message)
     throw err
   }
 }

@@ -365,6 +365,11 @@ export function insertSegments(db: DatabaseSync, sourceId: number, segments: New
   }
 }
 
+/** Removes all transcript segments of a source (so a retry never duplicates). */
+export function deleteSourceSegments(db: DatabaseSync, sourceId: number): void {
+  db.prepare('DELETE FROM segments WHERE source_id = ?').run(sourceId)
+}
+
 export function listSegments(db: DatabaseSync, sourceId: number): Segment[] {
   return db
     .prepare('SELECT * FROM segments WHERE source_id = ? ORDER BY idx')

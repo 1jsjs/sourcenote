@@ -142,6 +142,22 @@ export interface SummaryProgressEvent {
   message?: string
 }
 
+/** Stage of the "check my notes" pipeline, sent over `check:progress`. */
+export type CheckStage = 'locating' | 'verifying' | 'done' | 'error'
+
+/** Sent over the `check:progress` IPC channel. */
+export interface CheckProgressEvent {
+  noteId: number
+  stage: CheckStage
+  message?: string
+}
+
+/** App metadata for the renderer header (fake-mode badge). */
+export interface AppInfo {
+  fakeApi: boolean
+  version: string
+}
+
 /** API exposed to the renderer as `window.sourcenote`. */
 export interface SourcenoteApi {
   listNotes(): Promise<Note[]>
@@ -167,6 +183,11 @@ export interface SourcenoteApi {
    */
   getPathForFile(file: unknown): string
   listSegments(sourceId: number): Promise<Segment[]>
+  /**
+   * Re-runs the pipeline for one source (transcription or PDF extraction).
+   * Refuses with an error while that source is still processing.
+   */
+  retrySource(sourceId: number): Promise<Source>
   /** All extracted PDF pages of a note in order (for page counts). */
   listPages(noteId: number): Promise<NotePage[]>
   getSpend(): Promise<{ spentUsd: number; capUsd: number }>
@@ -185,6 +206,9 @@ export interface SourcenoteApi {
   /** Checks the user's own notes sentences against the lecture evidence. */
   runCheck(noteId: number, text: string): Promise<Summary>
   getLatestCheck(noteId: number): Promise<Summary | null>
+  onCheckProgress(cb: (event: CheckProgressEvent) => void): () => void
+  /** App metadata: fake-API badge flag and app version. */
+  getAppInfo(): Promise<AppInfo>
   getSettings(): Promise<AppSettings>
   setSettings(patch: Partial<AppSettings>): Promise<AppSettings>
   /** Folders under the bundled samples dir that contain a valid note.json. */

@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { AppLanguage } from '../shared/types'
 import { getMetaApiKey } from './apikey'
+import { createFakeMetaApi, isFakeApiEnabled } from './fake-api'
 import {
   chatCostUsd,
   estimateChatCostUsd,
@@ -103,6 +104,9 @@ function redact(text: string, key: string): string {
 }
 
 export function createMetaApi(deps: MetaApiDeps): MetaApi {
+  // Dev-only fake mode for previewing states: no fetch, no key, no ledger.
+  // The real path below is untouched.
+  if (isFakeApiEnabled()) return createFakeMetaApi()
   const getKey = deps.getKey ?? getMetaApiKey
   const fetchImpl = deps.fetchImpl ?? fetch
   const lang = (): AppLanguage => deps.getLanguage?.() ?? 'ko'

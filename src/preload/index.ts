@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type {
+  AppInfo,
   AppSettings,
+  CheckProgressEvent,
   CorrectionProgressEvent,
   Note,
   NotePage,
@@ -25,6 +27,8 @@ const api: SourcenoteApi = {
   // webUtils can resolve it here in the preload.
   getPathForFile: (file: unknown): string => webUtils.getPathForFile(file as never),
   listSegments: (sourceId) => ipcRenderer.invoke('segments:list', sourceId),
+  retrySource: (sourceId): Promise<Source> => ipcRenderer.invoke('sources:retry', sourceId),
+  getAppInfo: (): Promise<AppInfo> => ipcRenderer.invoke('app:info'),
   listPages: (noteId): Promise<NotePage[]> => ipcRenderer.invoke('pages:list', noteId),
   getSpend: () => ipcRenderer.invoke('budget:getSpend'),
   onProgress: (cb) => {
@@ -63,6 +67,15 @@ const api: SourcenoteApi = {
   },
   runCheck: (noteId, text) => ipcRenderer.invoke('check:run', noteId, text),
   getLatestCheck: (noteId) => ipcRenderer.invoke('check:getLatest', noteId),
+  onCheckProgress: (cb) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: CheckProgressEvent): void => {
+      cb(payload)
+    }
+    ipcRenderer.on('check:progress', listener)
+    return () => {
+      ipcRenderer.removeListener('check:progress', listener)
+    }
+  },
   getSettings: () => ipcRenderer.invoke('settings:get'),
   setSettings: (patch): Promise<AppSettings> => ipcRenderer.invoke('settings:set', patch),
   listSamples: (): Promise<SampleInfo[]> => ipcRenderer.invoke('samples:list'),
