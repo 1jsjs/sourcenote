@@ -563,6 +563,137 @@ function SummaryProgressStrip({
   )
 }
 
+/** What the home feed shows for one note, gathered from its sources and latest summary. */
+interface NoteDigest {
+  audioMs: number
+  pages: number
+  processing: boolean
+  claims: Claim[] | null
+}
+
+async function loadDigest(noteId: number): Promise<NoteDigest> {
+  const [sources, summary, pages] = await Promise.all([
+    window.sourcenote.listSources(noteId),
+    window.sourcenote.getLatestSummary(noteId),
+    window.sourcenote.listPages(noteId),
+  ])
+  return {
+    audioMs: sources
+      .filter((s) => s.kind !== 'pdf')
+      .reduce((sum, s) => sum + (s.duration_ms ?? 0), 0),
+    pages: pages.length,
+    processing: sources.some((s) => s.status !== 'done' && s.status !== 'error'),
+    claims: summary && summary.status === 'done' ? summary.claims : null,
+  }
+}
+
+/**
+ * Home view once notes exist: one entry per note, newest first, with what it
+ * holds (recording length, slide pages) and how much of its summary the
+ * sources back, drawn as the same squares the note itself shows.
+ */
+function NoteFeed({
+  lang,
+  notes,
+  onOpen,
+  onNew,
+}: {
+  lang: AppLanguage
+  notes: Note[]
+  onOpen: (noteId: number) => void
+  onNew: () => void
+}) {
+  const [digests, setDigests] = useState<Record<number, NoteDigest>>({})
+  useEffect(() => {
+    let alive = true
+    for (const note of notes) {
+      loadDigest(note.id)
+        .then((d) => alive && setDigests((prev) => ({ ...prev, [note.id]: d })))
+        .catch(() => {})
+    }
+    return () => {
+      alive = false
+    }
+  }, [notes])
+
+  const locale = lang === 'ko' ? 'ko-KR' : 'en-US'
+  const day = new Intl.DateTimeFormat(locale, { month: 'long', day: 'numeric' })
+  const clock = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' })
+
+  return (
+    <section className="feed" aria-labelledby="feed-title">
+      <header className="feed-head">
+        <h2 id="feed-title" className="feed-title">
+          {t(lang, 'feedTitle')}
+        </h2>
+        <span className="feed-count">{t(lang, 'feedCount', { count: notes.length })}</span>
+        <Button variant="secondary" size="md" className="feed-new" onClick={onNew}>
+          {t(lang, 'landingNewNote')}
+        </Button>
+      </header>
+      <ol className="feed-list">
+        {notes.map((note, i) => {
+          const d = digests[note.id]
+          const created = new Date(note.created_at)
+          // Like a notebook index, a day is written once; later entries keep only the time.
+          const sameDay =
+            i > 0 && day.format(new Date(notes[i - 1].created_at)) === day.format(created)
+          const supported = d?.claims?.filter((c) => c.verdict === 'supported').length ?? 0
+          const flagged = d?.claims?.filter((c) => c.verdict === 'unsupported').length ?? 0
+          return (
+            <li key={note.id}>
+              <button type="button" className="feed-entry" onClick={() => onOpen(note.id)}>
+                <span className="feed-meta">
+                  {!sameDay && <time dateTime={note.created_at}>{day.format(created)}</time>}
+                  <span>{clock.format(created)}</span>
+                </span>
+                <span className="feed-body">
+                <span className="feed-name">{note.title}</span>
+                {d === undefined ? (
+                  <span className="feed-line feed-pending">{t(lang, 'feedLoading')}</span>
+                ) : d.claims && d.claims.length > 0 ? (
+                  <span className="feed-line">
+                    <span className="feed-strip" aria-hidden="true">
+                      {d.claims.map((c) => (
+                        <span
+                          key={c.id}
+                          className={`evidence-cell evidence-cell-${c.verdict ?? 'pending'}`}
+                        />
+                      ))}
+                    </span>
+                    <span>
+                      {t(lang, 'evidenceOf', { count: supported, total: d.claims.length })}
+                    </span>
+                    {flagged > 0 && (
+                      <span className="feed-flag">
+                        {t(lang, 'evidenceFlagged', { count: flagged })}
+                      </span>
+                    )}
+                  </span>
+                ) : (
+                  <span className="feed-line feed-pending">
+                    {t(lang, d.processing ? 'feedProcessing' : 'feedNoSummary')}
+                  </span>
+                )}
+                {d !== undefined && (d.audioMs > 0 || d.pages > 0) && (
+                  <span className="feed-materials">
+                    {d.audioMs > 0 && (
+                      <span>{t(lang, 'feedAudio', { time: formatShort(d.audioMs) })}</span>
+                    )}
+                    {d.pages > 0 && <span>{t(lang, 'feedPages', { count: d.pages })}</span>}
+                  </span>
+                )}
+                </span>
+              </button>
+            </li>
+          )
+        })}
+      </ol>
+      <p className="feed-drop">{t(lang, 'landingDrop')}</p>
+    </section>
+  )
+}
+
 /**
  * Static, non-interactive preview card for the landing screen, built with
  * real components: one verified claim with time + page chips, one
@@ -1307,31 +1438,33 @@ export default function App() {
   }
 
   const handleDragEnter = (e: DragEvent<HTMLElement>): void => {
-    if (selectedNoteId === null || !e.dataTransfer.types.includes('Files')) return
+    if (notes.length === 0 || !e.dataTransfer.types.includes('Files')) return
     e.preventDefault()
     dragDepth.current += 1
     setDragging(true)
   }
 
   const handleDragLeave = (e: DragEvent<HTMLElement>): void => {
-    if (selectedNoteId === null) return
+    if (notes.length === 0) return
     e.preventDefault()
     dragDepth.current = Math.max(0, dragDepth.current - 1)
     if (dragDepth.current === 0) setDragging(false)
   }
 
   const handleDragOver = (e: DragEvent<HTMLElement>): void => {
-    if (selectedNoteId === null || !e.dataTransfer.types.includes('Files')) return
+    if (notes.length === 0 || !e.dataTransfer.types.includes('Files')) return
     e.preventDefault()
   }
 
   const handleDrop = (e: DragEvent<HTMLElement>): void => {
-    if (selectedNoteId === null) return
+    if (notes.length === 0) return
     e.preventDefault()
     dragDepth.current = 0
     setDragging(false)
     if (!e.dataTransfer.types.includes('Files')) return
-    void handleDropFiles(selectedNoteId, Array.from(e.dataTransfer.files))
+    // On the home feed a drop starts a new note, like the first-run screen.
+    if (selectedNoteId === null) void handleLandingDropFiles(Array.from(e.dataTransfer.files))
+    else void handleDropFiles(selectedNoteId, Array.from(e.dataTransfer.files))
   }
 
   /** Switches the player to the segment's source if needed, seeks and plays. */
@@ -1932,11 +2065,15 @@ export default function App() {
                 <p className="landing-footer">{t(lang, 'landingFooter')}</p>
               </div>
             ) : (
-              <div className="empty-state">
-                <p className="wordmark-large">{t(lang, 'appTitle')}</p>
-                <p className="empty-mantra">{t(lang, 'emptyMantra')}</p>
-                <p className="empty-hint">{t(lang, 'selectNote')}</p>
-              </div>
+              <NoteFeed
+                lang={lang}
+                notes={notes}
+                onOpen={(id) => {
+                  setSelectedNoteId(id)
+                  setMenuOpenId(null)
+                }}
+                onNew={() => newTitleRef.current?.focus()}
+              />
             )
           ) : (
             <>
