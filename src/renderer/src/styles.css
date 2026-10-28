@@ -18,6 +18,10 @@
     'Pretendard Variable', Pretendard, -apple-system, 'Apple SD Gothic Neo', 'Segoe UI',
     sans-serif;
   --float-shadow: 0 8px 24px rgb(30 36 51 / 0.14);
+  /* Text on a --pen fill, the white of a PDF page, and the dim behind a dialog. */
+  --on-pen: #fff;
+  --sheet: #fff;
+  --scrim: rgb(0 0 0 / 0.3);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -36,6 +40,7 @@
     --chip: #262b35;
     --chip-ink: #d3d9e3;
     --chip-line: #343b48;
+    --on-pen: #1c1f26;
   }
 }
 
@@ -48,7 +53,7 @@ html,
 body,
 #root {
   height: 100%;
-  overflow: hidden;
+  overflow: clip;
 }
 
 body {
@@ -65,6 +70,7 @@ h1,
 h2,
 h3 {
   line-height: 1.25;
+  text-wrap: balance;
 }
 
 /* Numbers that change (times, counts, spend) use tabular figures. */
@@ -185,17 +191,11 @@ h3 {
 .btn-primary {
   background: var(--pen);
   border-color: var(--pen);
-  color: #fff;
+  color: var(--on-pen);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--pen) 96%, #000 4%);
-}
-
-@media (prefers-color-scheme: dark) {
-  .btn-primary {
-    color: var(--page);
-  }
+  background: color-mix(in srgb, var(--pen) 96%, var(--ink) 4%);
 }
 
 .btn-danger {
@@ -1603,7 +1603,7 @@ select {
   width: 100%;
   border: 1px solid var(--rule);
   border-radius: 6px;
-  background: #fff;
+  background: var(--sheet);
   display: block;
 }
 
@@ -1683,7 +1683,7 @@ select {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--scrim);
 }
 
 .modal {
@@ -1791,13 +1791,14 @@ select:focus {
   animation: pill-slide 1.2s ease-in-out infinite;
 }
 
+/* The bar is 40% of the track, so 250% of its own width carries it past the end. */
 @keyframes pill-slide {
   0% {
-    margin-left: -40%;
+    transform: translateX(-100%);
   }
 
   100% {
-    margin-left: 100%;
+    transform: translateX(250%);
   }
 }
 

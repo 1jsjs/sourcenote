@@ -436,9 +436,9 @@ function ToastStack({
   toasts: Toast[]
   onDismiss: (id: number) => void
 }) {
-  if (toasts.length === 0) return null
+  // The live region stays mounted so screen readers announce toasts added to it.
   return (
-    <div className="toast-stack" aria-live="polite">
+    <div className="toast-stack" role="status" aria-live="polite">
       {toasts.map((toast) => (
         <div
           key={toast.id}
@@ -627,6 +627,10 @@ function sleep(ms: number): Promise<void> {
 
 export default function App() {
   const [lang, setLang] = useState<AppLanguage>('ko')
+  // Screen readers pick their voice from the document language.
+  useEffect(() => {
+    document.documentElement.lang = lang
+  }, [lang])
   const [booted, setBooted] = useState(false)
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null)
   const [notes, setNotes] = useState<Note[]>([])
@@ -1560,11 +1564,11 @@ export default function App() {
                       variant="ghost"
                       size="sm"
                       className="seg-time"
-                      title={t(lang, 'playFromHere')}
+                      title={`${t(lang, 'playFromHere')} (${formatShort(seg.start_ms)} ~ ${formatShort(seg.end_ms)})`}
                       aria-label={`${t(lang, 'playFromHere')} ${formatShort(seg.start_ms)}`}
                       onClick={() => handleTimestampClick(source.id, seg.id, seg.start_ms)}
                     >
-                      {formatShort(seg.start_ms)}–{formatShort(seg.end_ms)}
+                      {formatShort(seg.start_ms)}
                     </Button>{' '}
                     {seg.original_text !== null && (
                       <span
@@ -1679,6 +1683,7 @@ export default function App() {
             variant="secondary"
             size="sm"
             className={lang === 'ko' ? 'lang-option selected' : 'lang-option'}
+            aria-pressed={lang === 'ko'}
             disabled={langSaving}
             onClick={() => void handleSwitchLanguage('ko')}
           >
@@ -1688,6 +1693,7 @@ export default function App() {
             variant="secondary"
             size="sm"
             className={lang === 'en' ? 'lang-option selected' : 'lang-option'}
+            aria-pressed={lang === 'en'}
             disabled={langSaving}
             onClick={() => void handleSwitchLanguage('en')}
           >
@@ -1712,6 +1718,7 @@ export default function App() {
               ref={newTitleRef}
               value={newTitle}
               placeholder={t(lang, 'noteTitlePlaceholder')}
+              aria-label={t(lang, 'noteTitlePlaceholder')}
               onChange={(e) => setNewTitle(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') void handleCreateNote()
@@ -2257,11 +2264,14 @@ export default function App() {
                     }}
                   >
                     <div className="section-head">
-                      <h3 className="section-title">{t(lang, 'checkNotesTitle')}</h3>
+                      <h3 id="check-notes-title" className="section-title">
+                        {t(lang, 'checkNotesTitle')}
+                      </h3>
                     </div>
                     <textarea
                       spellCheck={false}
                       className="check-input"
+                      aria-labelledby="check-notes-title"
                       value={checkText}
                       placeholder={t(lang, 'checkPlaceholder')}
                       onChange={(e) => setCheckText(e.target.value)}
