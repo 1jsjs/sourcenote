@@ -967,21 +967,25 @@ select {
 .evidence-bar {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
+  gap: 12px;
   font-size: 14px;
   color: var(--ink);
   margin: 0 0 8px;
   font-variant-numeric: tabular-nums;
 }
 
-.evidence-bar {
-  gap: 4px 12px;
+/* The counts keep one line; a long note folds the squares instead. */
+.evidence-bar > span,
+.evidence-bar > .evidence-flag {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 /* One square per sentence: a quick read of how much of the note holds up. */
 .evidence-strip {
   display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
   flex-wrap: wrap;
   gap: 4px;
   margin: 0;
