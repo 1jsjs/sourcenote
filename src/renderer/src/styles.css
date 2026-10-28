@@ -998,6 +998,13 @@ select {
   cursor: pointer;
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .evidence-cell:hover {
+    outline: 2px solid var(--ink-faint);
+    outline-offset: 1px;
+  }
+}
+
 .evidence-cell-unsupported {
   background: var(--red);
 }
@@ -1115,7 +1122,8 @@ select {
 }
 
 .claim-text-unsupported {
-  background-image: linear-gradient(var(--red-wash), var(--red-wash));
+  /* One flat colour; the gradient is only there so the wash can sweep in via background-size. */
+  background-image: linear-gradient(var(--red-wash), var(--red-wash)); /* taste-skill-ignore */
   background-repeat: no-repeat;
   background-size: 100% 100%;
   -webkit-box-decoration-break: clone;

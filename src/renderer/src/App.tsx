@@ -334,10 +334,18 @@ function EvidenceBar({
   return (
     <div className="evidence-bar">
       <ol className="evidence-strip" aria-hidden="true">
-        {claims.map((c) => (
+        {claims.map((c, i) => (
           <li
             key={c.id}
             className={`evidence-cell evidence-cell-${c.verdict ?? 'pending'}`}
+            title={`${i + 1}. ${t(
+              lang,
+              c.verdict === 'supported'
+                ? 'verifiedCount'
+                : c.verdict === 'unsupported'
+                  ? 'notInSources'
+                  : 'checkingMark',
+            )}`}
             onClick={() => onStepFlag(c.id)}
           />
         ))}
