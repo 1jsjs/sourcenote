@@ -315,8 +315,9 @@ function ClaimList({
 }
 
 /**
- * "13 sentences · 11 cited and verified · 2 not in sources". The red count
- * is a button that steps through the flagged sentences.
+ * One square per sentence (red = not in sources) plus "11 of 13 sentences
+ * cited and verified". Squares jump to their sentence; the red count is a
+ * button that steps through the flagged sentences.
  */
 function EvidenceBar({
   lang,
@@ -331,15 +332,17 @@ function EvidenceBar({
   const supported = claims.filter((c) => c.verdict === 'supported').length
   const cursor = useRef(0)
   return (
-    <p className="evidence-bar">
-      <span>{t(lang, 'evidenceSentences', { count: claims.length })}</span>
-      <span className="evidence-sep" aria-hidden="true">
-        ·
-      </span>
-      <span>{t(lang, 'evidenceCited', { count: supported })}</span>
-      <span className="evidence-sep" aria-hidden="true">
-        ·
-      </span>
+    <div className="evidence-bar">
+      <ol className="evidence-strip" aria-hidden="true">
+        {claims.map((c) => (
+          <li
+            key={c.id}
+            className={`evidence-cell evidence-cell-${c.verdict ?? 'pending'}`}
+            onClick={() => onStepFlag(c.id)}
+          />
+        ))}
+      </ol>
+      <span>{t(lang, 'evidenceOf', { count: supported, total: claims.length })}</span>
       {flaggedIds.length > 0 ? (
         <Button
           variant="ghost"
@@ -354,9 +357,9 @@ function EvidenceBar({
           {t(lang, 'evidenceFlagged', { count: flaggedIds.length })}
         </Button>
       ) : (
-        <span>{t(lang, 'evidenceFlagged', { count: 0 })}</span>
+        <span className="evidence-none">{t(lang, 'evidenceFlagged', { count: 0 })}</span>
       )}
-    </p>
+    </div>
   )
 }
 
@@ -1558,9 +1561,11 @@ export default function App() {
                     {seg.original_text !== null && (
                       <span
                         className="corrected-mark"
+                        role="img"
+                        aria-label={t(lang, 'correctedMark')}
                         title={t(lang, 'correctedTitle', { text: seg.original_text })}
                       >
-                        {t(lang, 'correctedMark')}
+                        <PenIcon />
                       </span>
                     )}{' '}
                     {seg.text}
@@ -2123,12 +2128,17 @@ export default function App() {
                         corrections.length > 0 && (
                           <>
                             <p className="counts-line">
-                              {t(lang, 'suggestedFixes')}{' '}
-                              {pendingCorrections.length} ·{' '}
-                              {t(lang, 'acceptedCount')}{' '}
-                              {corrections.filter((c) => c.status === 'accepted').length} ·{' '}
-                              {t(lang, 'rejectedCount')}{' '}
-                              {corrections.filter((c) => c.status === 'rejected').length}{' '}
+                              <span>
+                                {t(lang, 'suggestedFixes')} {pendingCorrections.length}
+                              </span>
+                              <span>
+                                {t(lang, 'acceptedCount')}{' '}
+                                {corrections.filter((c) => c.status === 'accepted').length}
+                              </span>
+                              <span>
+                                {t(lang, 'rejectedCount')}{' '}
+                                {corrections.filter((c) => c.status === 'rejected').length}
+                              </span>
                               {pendingCorrections.length > 0 && (
                                 <Button
                                   variant="ghost"

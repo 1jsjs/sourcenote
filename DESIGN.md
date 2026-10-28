@@ -66,8 +66,11 @@ Supported sentences get no color of their own: a small check in `--ink-muted` in
 - **Claim:** margin column (40 px) holds the status mark left of the pale margin line; text to the
   right. Unsupported: `--red-wash` highlighter behind the text, red wavy underline, a "Not in
   sources" label, and the reason below in `--red` at 14 px (indented, no border).
-- **Evidence bar** above the summary: "13 sentences · 11 cited and verified · 2 not in sources".
-  Clicking the red count steps through the flagged sentences.
+- **Evidence bar** above the summary: one 10 px square per sentence (muted ink, red for "Not in
+  sources", outlined while pending), then "11 of 13 sentences cited and verified" and the red
+  count. A square jumps to its sentence; the red count steps through the flagged sentences. No
+  middle-dot meta strings, no em dashes in UI copy, and no side-stripe accents (the selected note
+  is a filled row only), per the anti-slop checklists (Impeccable, Hallmark, frontend-design).
 - **Verification reveal:** when a verification run finishes, marks appear top to bottom (40 ms
   stagger) and the red highlighter sweeps in left to right (600 ms, `cubic-bezier(.16,1,.3,1)`).
   Respects `prefers-reduced-motion`.

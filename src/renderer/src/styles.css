@@ -477,7 +477,7 @@ select {
 .wordmark {
   margin: 0;
   font-family: var(--serif);
-  font-size: 19px;
+  font-size: 20px;
   font-weight: 600;
   letter-spacing: 0.01em;
   white-space: nowrap;
@@ -607,7 +607,6 @@ select {
 
 .note-row.selected {
   background: var(--page);
-  box-shadow: inset 2px 0 0 var(--pen);
 }
 
 .note-item {
@@ -739,13 +738,13 @@ select {
 .wordmark-large {
   margin: 0 0 12px;
   font-family: var(--serif);
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 600;
 }
 
 .empty-mantra {
   margin: 0 0 20px;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.7;
   color: var(--ink-muted);
 }
@@ -976,9 +975,40 @@ select {
   font-variant-numeric: tabular-nums;
 }
 
-.evidence-sep {
-  color: var(--ink-faint);
-  margin: 0 4px;
+.evidence-bar {
+  gap: 4px 12px;
+}
+
+/* One square per sentence: a quick read of how much of the note holds up. */
+.evidence-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-width: 100%;
+}
+
+.evidence-cell {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--ink) 22%, transparent);
+  cursor: pointer;
+}
+
+.evidence-cell-unsupported {
+  background: var(--red);
+}
+
+.evidence-cell-pending {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--ink-faint);
+}
+
+.evidence-none {
+  color: var(--ink-muted);
 }
 
 .evidence-flag {
@@ -996,6 +1026,10 @@ select {
 }
 
 .counts-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
   font-size: 13px;
   color: var(--ink-muted);
   margin: 0 0 8px;
@@ -1501,14 +1535,15 @@ select {
 }
 
 .corrected-mark {
-  font-size: 11px;
-  border-radius: 999px;
-  padding: 1px 8px;
-  background: var(--chip);
-  border: 1px solid var(--chip-line);
-  color: var(--chip-ink);
-  white-space: nowrap;
+  display: inline-flex;
+  vertical-align: -2px;
+  color: var(--ink-faint);
   cursor: default;
+}
+
+.corrected-mark svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* ---- slide viewer ---- */
