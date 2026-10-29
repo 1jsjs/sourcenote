@@ -93,6 +93,17 @@ Try it with the original sample lecture in [`samples/`](samples/README.md).
 
 Other scripts: `npm test` (vitest), `npm run typecheck`, `npm run build`.
 
+## Build the app
+
+```sh
+npm run dist:mac   # release/Sourcenote-<version>-mac-arm64.dmg (Apple silicon)
+npm run dist:win   # release/Sourcenote-<version>-win-x64-setup.exe
+```
+
+The sample notes are bundled, so a fresh install can open them without an API key.
+A Mac build is signed when a "Developer ID Application" certificate is in the keychain;
+`CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist:mac` builds an unsigned copy for local testing.
+
 ## How it was built
 
 Built during the hackathon. The citation-enforced summary, verification, click-to-play,

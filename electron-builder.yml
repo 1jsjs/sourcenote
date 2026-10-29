@@ -1,0 +1,36 @@
+appId: build.jinsu.sourcenote
+productName: Sourcenote
+copyright: Copyright © 2026 Park Jinsu
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**
+  - package.json
+  # Main loads only the legacy pdf.js build; the renderer bundles its own copy.
+  - "!node_modules/pdfjs-dist/{build,web,types,image_decoders}/**"
+# ffmpeg is spawned as a process, so its binary must live outside app.asar.
+asarUnpack:
+  - node_modules/ffmpeg-static/**
+extraResources:
+  - from: samples/notes
+    to: samples/notes
+mac:
+  target:
+    - target: dmg
+      arch: arm64
+  category: public.app-category.education
+  hardenedRuntime: true
+  # Signing and notarization turn on when a "Developer ID Application" identity
+  # is in the keychain and APPLE_KEYCHAIN_PROFILE names a notarytool profile.
+  notarize: false
+dmg:
+  artifactName: Sourcenote-${version}-mac-${arch}.dmg
+win:
+  target:
+    - target: nsis
+      arch: x64
+nsis:
+  artifactName: Sourcenote-${version}-win-${arch}-setup.exe
+  oneClick: false
+  allowToChangeInstallationDirectory: true

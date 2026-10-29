@@ -43,10 +43,15 @@ export function planChunks(durationMs: number, chunkMs: number = CHUNK_MS): Chun
   return plans
 }
 
-/** ffmpeg-static binary, falling back to `ffmpeg` on PATH. */
+/**
+ * ffmpeg-static binary, falling back to `ffmpeg` on PATH. In a packaged app the
+ * module resolves inside app.asar, but the binary is unpacked next to it
+ * (electron-builder `asarUnpack`), since a process cannot be spawned from asar.
+ */
 export function resolveFfmpegPath(): string {
-  if (typeof ffmpegStatic === 'string' && ffmpegStatic.length > 0 && fs.existsSync(ffmpegStatic)) {
-    return ffmpegStatic
+  if (typeof ffmpegStatic === 'string' && ffmpegStatic.length > 0) {
+    const unpacked = ffmpegStatic.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`)
+    if (fs.existsSync(unpacked)) return unpacked
   }
   return 'ffmpeg'
 }
