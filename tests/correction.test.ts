@@ -230,6 +230,20 @@ describe('accept/reject logic', () => {
     expect(listCorrections(db, noteId).find((c) => c.id === second.id)?.status).toBe('accepted')
   })
 
+  it('acceptAll removes duplicates before term fixes that overlap them', () => {
+    const segs = listNoteSegments(db, noteId)
+    db.prepare('UPDATE segments SET text = ? WHERE id = ?').run('작은 묶음 즉 미니 배치로 배치로 나눕니다', segs[0].id)
+    insertCorrections(db, noteId, [
+      { segmentId: segs[0].id, beforeText: '미니 배치', afterText: 'mini-batch', reason: '용어', kind: 'term' },
+      { segmentId: segs[0].id, beforeText: '배치로 배치로', afterText: '배치로', reason: '중복', kind: 'duplicate' },
+    ])
+    expect(acceptAllCorrections(db, noteId)).toEqual({ accepted: 2 })
+    const row = db.prepare('SELECT text FROM segments WHERE id = ?').get(segs[0].id) as unknown as {
+      text: string
+    }
+    expect(row.text).toBe('작은 묶음 즉 mini-batch로 나눕니다')
+  })
+
   it('accepting a non-pending or missing correction throws a Korean error', () => {
     expect(() => acceptCorrection(db, 9999)).toThrow('찾을 수 없습니다')
     runProposals()

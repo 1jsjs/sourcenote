@@ -369,9 +369,16 @@ export function rejectCorrection(db: DatabaseSync, correctionId: number): void {
   setCorrectionStatus(db, correctionId, 'rejected')
 }
 
-/** Accepts all pending corrections of a note in id order. Returns the accepted count. */
+/**
+ * Accepts all pending corrections of a note. Duplicate removals go first, then
+ * id order: a term fix applied first can rewrite part of a repeated phrase
+ * ("미니 배치로 배치로" -> "mini-batch로 배치로"), after which the duplicate no
+ * longer matches and is rejected. Returns the accepted count.
+ */
 export function acceptAllCorrections(db: DatabaseSync, noteId: number): { accepted: number } {
-  const pending = listCorrections(db, noteId).filter((c) => c.status === 'pending')
+  const pending = listCorrections(db, noteId)
+    .filter((c) => c.status === 'pending')
+    .sort((a, b) => Number(b.kind === 'duplicate') - Number(a.kind === 'duplicate') || a.id - b.id)
   let accepted = 0
   for (const c of pending) {
     const result = acceptCorrection(db, c.id)
