@@ -16,6 +16,10 @@ extraResources:
   - from: samples/notes
     to: samples/notes
 mac:
+  # macOS decodes audio with the system afconvert. The ffmpeg-static macOS
+  # binary is built with --enable-nonfree and may not be redistributed.
+  files:
+    - "!node_modules/ffmpeg-static/ffmpeg"
   target:
     - target: dmg
       arch: arm64

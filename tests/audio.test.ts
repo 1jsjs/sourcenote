@@ -1,10 +1,16 @@
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   buildChunkArgs,
   CHUNK_MS,
   chunkFileName,
+  findWavData,
   parseFfmpegDuration,
+  pcmWavHeader,
   planChunks,
+  splitWav,
 } from '../src/main/audio'
 
 describe('planChunks', () => {
@@ -109,5 +115,39 @@ describe('chunkFileName', () => {
     expect(chunkFileName(0)).toBe('chunk_000.wav')
     expect(chunkFileName(7)).toBe('chunk_007.wav')
     expect(chunkFileName(123)).toBe('chunk_123.wav')
+  })
+})
+
+describe('WAV slicing (macOS afconvert path)', () => {
+  it('finds the data chunk after extra RIFF chunks', () => {
+    const pcm = Buffer.alloc(320)
+    const fllr = Buffer.concat([Buffer.from('FLLR'), Buffer.from([4, 0, 0, 0]), Buffer.alloc(4)])
+    const std = pcmWavHeader(pcm.length)
+    // RIFF/WAVE + fmt chunk, then a filler chunk, then data.
+    const wav = Buffer.concat([std.subarray(0, 36), fllr, std.subarray(36), pcm])
+    expect(findWavData(wav, wav.length)).toEqual({ dataOffset: 36 + 12 + 8, dataBytes: 320 })
+    expect(findWavData(Buffer.from('not a wav file'), 14)).toBeNull()
+  })
+
+  it('splits by plan into exact 16 kHz mono byte ranges', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sourcenote-split-'))
+    try {
+      const pcm = Buffer.alloc(3000 * 32) // 3 s
+      for (let i = 0; i < pcm.length / 2; i++) pcm.writeInt16LE(i % 30000, i * 2)
+      const src = path.join(dir, 'full.wav')
+      fs.writeFileSync(src, Buffer.concat([pcmWavHeader(pcm.length), pcm]))
+      const outs = splitWav(src, dir, [
+        { index: 0, offsetMs: 0, durationMs: 1000 },
+        { index: 1, offsetMs: 1000, durationMs: 2000 },
+      ])
+      const second = fs.readFileSync(outs[1])
+      expect(fs.readFileSync(outs[0]).length).toBe(44 + 32000)
+      expect(second.length).toBe(44 + 64000)
+      expect(second.readUInt32LE(40)).toBe(64000)
+      // First sample of chunk 1 is sample 16000 of the source.
+      expect(second.readInt16LE(44)).toBe(16000)
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

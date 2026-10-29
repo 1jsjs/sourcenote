@@ -39,7 +39,8 @@ Built during the Meta Global AI Developer Hackathon (Oct 27 – Nov 5, 2026).
 
 - macOS on Apple Silicon (signed, notarized DMG) or Windows x64 (unsigned installer built in CI)
 - Node 24+
-- ffmpeg: bundled via `ffmpeg-static`, falling back to `ffmpeg` on PATH
+- Audio decoding: the system `afconvert` on macOS (WAV, MP3, M4A, AAC, FLAC, OGG,
+  MP4, MOV); a bundled ffmpeg on Windows (also WebM)
 - A Meta AI API key with access to `muse-voice-transcribe-1.0`
 
 ## API key
@@ -150,4 +151,18 @@ Stored in Electron's `userData` directory (or `SOURCENOTE_DATA_DIR` when set):
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Sourcenote's own code is MIT — see [LICENSE](LICENSE).
+
+### Third-party: FFmpeg (Windows build only)
+
+The Windows installer bundles an FFmpeg 6.1 executable (from the
+[`ffmpeg-static` b6.1.1 release](https://github.com/eugeneware/ffmpeg-static/releases/tag/b6.1.1),
+a gyan.dev build configured with `--enable-gpl --enable-version3`), so that
+executable is licensed under the **GNU GPL v3**. Sourcenote runs it as a
+separate process and does not link to it. Its license text ships inside the
+app at `resources/app.asar.unpacked/node_modules/ffmpeg-static/ffmpeg.exe.LICENSE`,
+and the FFmpeg source code is available at <https://ffmpeg.org/download.html>.
+
+The macOS build bundles no FFmpeg: the `ffmpeg-static` macOS binary is built
+with `--enable-nonfree` and may not be redistributed, so macOS uses the
+system `afconvert` instead.

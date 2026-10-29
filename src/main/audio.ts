@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import ffmpegStatic from 'ffmpeg-static'
@@ -9,9 +10,21 @@ const execFileAsync = promisify(execFile)
 /**
  * Audio preparation for the transcribe API: probe duration, then convert to
  * 16 kHz mono s16 PCM WAV chunks of at most CHUNK_MS. Chunk boundaries are
- * planned by the pure planChunks() and each chunk is produced with explicit
- * -ss/-t so the API offsets map exactly onto the source timeline.
+ * planned by the pure planChunks().
+ *
+ * Windows/Linux use the bundled ffmpeg with explicit -ss/-t per chunk. macOS
+ * uses the system afconvert instead (the macOS ffmpeg-static build includes
+ * non-free parts and may not be redistributed): the whole file is decoded to
+ * one WAV once, its exact length is the duration, and chunks are byte slices.
  */
+
+/** macOS decodes with the system afconvert instead of a bundled ffmpeg. */
+export const USE_AFCONVERT = process.platform === 'darwin'
+
+const AFCONVERT = '/usr/bin/afconvert'
+
+/** 16 kHz mono s16: 32 bytes of PCM per millisecond. */
+const PCM_BYTES_PER_MS = 32
 
 /** 9m30s — safety margin under the API's 10 minute per-call limit. */
 export const CHUNK_MS = 570_000
@@ -74,6 +87,10 @@ export async function getAudioDurationMs(
   filePath: string,
   ffmpegPath: string = resolveFfmpegPath(),
 ): Promise<number> {
+  if (USE_AFCONVERT) {
+    const wav = await decodeWholeFile(filePath)
+    return pcmBytesToMs(readWavData(wav).dataBytes)
+  }
   let stderr = ''
   try {
     const res = await execFileAsync(ffmpegPath, ['-hide_banner', '-i', filePath], {
@@ -152,6 +169,15 @@ export async function convertToChunks(
   ffmpegPath: string = resolveFfmpegPath(),
 ): Promise<string[]> {
   fs.mkdirSync(outDir, { recursive: true })
+  if (USE_AFCONVERT) {
+    const wav = await decodeWholeFile(inputPath)
+    try {
+      return splitWav(wav, outDir, plans)
+    } finally {
+      fs.rmSync(wav, { force: true })
+      decodedWavs.delete(inputPath)
+    }
+  }
   const outputs: string[] = []
   for (const plan of plans) {
     const out = path.join(outDir, chunkFileName(plan.index))
@@ -159,4 +185,113 @@ export async function convertToChunks(
     outputs.push(out)
   }
   return outputs
+}
+
+// ---- macOS: afconvert decode + WAV slicing ----
+
+/** Decoded WAV per input path, shared by the duration probe and the split. */
+const decodedWavs = new Map<string, string>()
+
+function pcmBytesToMs(bytes: number): number {
+  return Math.round(bytes / PCM_BYTES_PER_MS)
+}
+
+function msToPcmBytes(ms: number): number {
+  // Whole 16-bit samples only.
+  return Math.round(ms * 16) * 2
+}
+
+/** Decodes the whole input to one 16 kHz mono s16 WAV in the temp dir (cached). */
+async function decodeWholeFile(inputPath: string): Promise<string> {
+  const cached = decodedWavs.get(inputPath)
+  if (cached && fs.existsSync(cached)) return cached
+  const out = path.join(
+    os.tmpdir(),
+    `sourcenote-decode-${process.pid}-${Math.random().toString(36).slice(2)}.wav`,
+  )
+  try {
+    await execFileAsync(AFCONVERT, ['-f', 'WAVE', '-d', 'LEI16@16000', '-c', '1', inputPath, out], {
+      timeout: 30 * 60 * 1000,
+      maxBuffer: 4 * 1024 * 1024,
+    })
+  } catch {
+    fs.rmSync(out, { force: true })
+    throw new Error(
+      `오디오를 읽지 못했습니다 (${path.basename(inputPath)}). m4a·mp3·wav 파일로 바꿔 넣어 주세요.`,
+    )
+  }
+  decodedWavs.set(inputPath, out)
+  return out
+}
+
+/** Byte offset and length of the PCM `data` chunk, walking the RIFF chunks. */
+export function findWavData(
+  head: Buffer,
+  fileSize: number,
+): { dataOffset: number; dataBytes: number } | null {
+  if (head.length < 12 || head.toString('ascii', 0, 4) !== 'RIFF' || head.toString('ascii', 8, 12) !== 'WAVE') {
+    return null
+  }
+  let pos = 12
+  while (pos + 8 <= head.length) {
+    const id = head.toString('ascii', pos, pos + 4)
+    const size = head.readUInt32LE(pos + 4)
+    if (id === 'data') {
+      const dataOffset = pos + 8
+      return { dataOffset, dataBytes: Math.min(size, fileSize - dataOffset) }
+    }
+    pos += 8 + size + (size % 2)
+  }
+  return null
+}
+
+function readWavData(wavPath: string): { dataOffset: number; dataBytes: number } {
+  const fd = fs.openSync(wavPath, 'r')
+  try {
+    const head = Buffer.alloc(64 * 1024)
+    const read = fs.readSync(fd, head, 0, head.length, 0)
+    const found = findWavData(head.subarray(0, read), fs.fstatSync(fd).size)
+    if (!found) throw new Error(`변환된 오디오를 읽지 못했습니다: ${path.basename(wavPath)}`)
+    return found
+  } finally {
+    fs.closeSync(fd)
+  }
+}
+
+/** 44-byte header for 16 kHz mono s16 PCM. */
+export function pcmWavHeader(dataBytes: number): Buffer {
+  const h = Buffer.alloc(44)
+  h.write('RIFF', 0, 'ascii')
+  h.writeUInt32LE(36 + dataBytes, 4)
+  h.write('WAVE', 8, 'ascii')
+  h.write('fmt ', 12, 'ascii')
+  h.writeUInt32LE(16, 16)
+  h.writeUInt16LE(1, 20) // PCM
+  h.writeUInt16LE(1, 22) // mono
+  h.writeUInt32LE(16000, 24)
+  h.writeUInt32LE(16000 * 2, 28)
+  h.writeUInt16LE(2, 32)
+  h.writeUInt16LE(16, 34)
+  h.write('data', 36, 'ascii')
+  h.writeUInt32LE(dataBytes, 40)
+  return h
+}
+
+/** Writes each planned chunk as a byte slice of the decoded WAV. */
+export function splitWav(wavPath: string, outDir: string, plans: ChunkPlan[]): string[] {
+  const { dataOffset, dataBytes } = readWavData(wavPath)
+  const fd = fs.openSync(wavPath, 'r')
+  try {
+    return plans.map((plan) => {
+      const start = Math.min(msToPcmBytes(plan.offsetMs), dataBytes)
+      const end = Math.min(msToPcmBytes(plan.offsetMs + plan.durationMs), dataBytes)
+      const pcm = Buffer.alloc(end - start)
+      fs.readSync(fd, pcm, 0, pcm.length, dataOffset + start)
+      const out = path.join(outDir, chunkFileName(plan.index))
+      fs.writeFileSync(out, Buffer.concat([pcmWavHeader(pcm.length), pcm]))
+      return out
+    })
+  } finally {
+    fs.closeSync(fd)
+  }
 }
