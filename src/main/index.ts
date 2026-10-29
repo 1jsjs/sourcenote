@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, protocol } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, protocol, safeStorage } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 import { Readable } from 'node:stream'
@@ -7,6 +7,7 @@ import { Readable } from 'node:stream'
 // before any module that depends on it is evaluated.
 import './env'
 
+import { getApiKeySource, setStoredKeyReader } from './apikey'
 import { budgetCapUsd, LedgerStore } from './budget'
 import { runCheckPipeline } from './check-pipeline'
 import {
@@ -33,6 +34,7 @@ import {
   renameNote,
 } from './db'
 import { isFakeApiEnabled } from './fake-api'
+import { clearApiKey, type KeyCipher, KeyStoreError, loadApiKey, saveApiKey } from './key-store'
 import { langMsg } from './lang'
 import { mediaContentTypeForPath, parseMediaSourceUrl, parseRangeHeader } from './media'
 import { createMetaApi } from './meta-api'
@@ -42,7 +44,14 @@ import { runAudioPipeline } from './pipeline'
 import { importSampleNote, listSampleNotes, resolveSamplesDir } from './sample'
 import { loadSettings, parseSettings, saveSettings } from './settings'
 import { runSummaryPipeline } from './summary-pipeline'
-import { dbFilePath, ensureDataDir, ledgerFilePath, mediaDirPath, settingsFilePath } from './paths'
+import {
+  apiKeyFilePath,
+  dbFilePath,
+  ensureDataDir,
+  ledgerFilePath,
+  mediaDirPath,
+  settingsFilePath,
+} from './paths'
 import type {
   AppLanguage,
   CheckProgressEvent,
@@ -151,6 +160,18 @@ const ledger = new LedgerStore(ledgerFilePath(dataDir))
 const settingsPath = settingsFilePath(dataDir)
 /** Current app language; read live so a toggle applies to the next call. */
 const currentLanguage = (): AppLanguage => loadSettings(settingsPath).language
+const keyPath = apiKeyFilePath(dataDir)
+const keyCipher: KeyCipher = {
+  isAvailable: () => safeStorage.isAsyncEncryptionAvailable(),
+  encrypt: (plain) => safeStorage.encryptStringAsync(plain),
+  decrypt: async (encrypted) => (await safeStorage.decryptStringAsync(encrypted)).result,
+}
+// Decrypted once and kept in memory; refreshed when the dialog saves or clears.
+let storedKey: Promise<string | null> | undefined
+setStoredKeyReader(() => {
+  storedKey ??= loadApiKey(keyPath, keyCipher)
+  return storedKey
+})
 const metaApi = createMetaApi({ ledger, getLanguage: currentLanguage })
 const samplesDir = resolveSamplesDir({
   appPath: app.getAppPath(),
@@ -188,6 +209,40 @@ function registerIpc(getWindow: () => BrowserWindow | null): void {
         ? (patch as Record<string, unknown>)
         : {}
     return saveSettings(settingsPath, parseSettings({ ...current, ...extra }))
+  })
+
+  ipcMain.handle('apikey:source', () => getApiKeySource())
+
+  ipcMain.handle('apikey:save', async (_e, key: unknown) => {
+    try {
+      await saveApiKey(keyPath, keyCipher, key)
+    } catch (err) {
+      const code = err instanceof KeyStoreError ? err.code : 'unavailable'
+      const lang = currentLanguage()
+      throw new Error(
+        code === 'empty'
+          ? langMsg(lang, '키를 입력해 주세요.', 'Enter a key.')
+          : code === 'invalid'
+            ? langMsg(
+                lang,
+                '키에 공백이나 줄바꿈이 섞여 있습니다. 키만 다시 붙여 넣어 주세요.',
+                'The key contains spaces or line breaks. Paste only the key.',
+              )
+            : langMsg(
+                lang,
+                '이 컴퓨터에서는 키를 암호화해 저장할 수 없습니다.',
+                'This computer cannot store the key encrypted.',
+              ),
+      )
+    }
+    storedKey = undefined
+    return getApiKeySource()
+  })
+
+  ipcMain.handle('apikey:clear', () => {
+    clearApiKey(keyPath)
+    storedKey = undefined
+    return getApiKeySource()
   })
 
   ipcMain.handle('samples:list', () => listSampleNotes(samplesDir))

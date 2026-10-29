@@ -153,6 +153,9 @@ export interface CheckProgressEvent {
 }
 
 /** App metadata for the renderer header (fake-mode badge). */
+/** Where the Meta API key in use comes from; the key itself never reaches the renderer. */
+export type ApiKeySource = 'env' | 'saved' | 'keychain' | 'none'
+
 export interface AppInfo {
   fakeApi: boolean
   version: string
@@ -211,6 +214,12 @@ export interface SourcenoteApi {
   getAppInfo(): Promise<AppInfo>
   getSettings(): Promise<AppSettings>
   setSettings(patch: Partial<AppSettings>): Promise<AppSettings>
+  /** Which Meta API key is in use (env, saved in the app, keychain, or none). */
+  getApiKeySource(): Promise<ApiKeySource>
+  /** Encrypts and saves a key typed into the app; returns the new source. */
+  saveApiKey(key: string): Promise<ApiKeySource>
+  /** Removes the key saved in the app; returns the new source. */
+  clearApiKey(): Promise<ApiKeySource>
   /** Folders under the bundled samples dir that contain a valid note.json. */
   listSamples(): Promise<SampleInfo[]>
   /** Imports a bundled sample as a new note (a second import makes a copy). */

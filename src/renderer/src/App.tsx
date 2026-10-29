@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import type {
+  ApiKeySource,
   AppInfo,
   AppLanguage,
   CheckProgressEvent,
@@ -24,6 +25,7 @@ import type {
   SummaryProgressEvent,
 } from '../../shared/types'
 import { splitSentences } from '../../shared/sentences'
+import ApiKeyDialog from './ApiKeyDialog'
 import AudioPlayer from './AudioPlayer'
 import Button, { Spinner } from './Button'
 import {
@@ -806,6 +808,8 @@ export default function App() {
   const [sampleBusy, setSampleBusy] = useState<string | null>(null)
   const [showLandingSamples, setShowLandingSamples] = useState(false)
   const [langSaving, setLangSaving] = useState(false)
+  const [keySource, setKeySource] = useState<ApiKeySource | null>(null)
+  const [keyDialogOpen, setKeyDialogOpen] = useState(false)
   const [menuOpenId, setMenuOpenId] = useState<number | null>(null)
   const [renamingId, setRenamingId] = useState<number | null>(null)
   const [renameText, setRenameText] = useState('')
@@ -879,14 +883,16 @@ export default function App() {
     let cancelled = false
     void (async () => {
       try {
-        const [settings, noteList, sampleList, info] = await Promise.all([
+        const [settings, noteList, sampleList, info, source] = await Promise.all([
           window.sourcenote.getSettings(),
           window.sourcenote.listNotes(),
           window.sourcenote.listSamples(),
           window.sourcenote.getAppInfo(),
+          window.sourcenote.getApiKeySource(),
         ])
         if (cancelled) return
         setLang(settings.language)
+        setKeySource(source)
         setNotes(noteList)
         setSamples(sampleList)
         setAppInfo(info)
@@ -1811,6 +1817,17 @@ export default function App() {
         >
           ${spend.spentUsd.toFixed(4)} / ${spend.capUsd}
         </span>
+        {keySource !== null && appInfo?.fakeApi !== true && (
+          <Button
+            variant="secondary"
+            size="sm"
+            className={keySource === 'none' ? 'key-button missing' : 'key-button'}
+            aria-haspopup="dialog"
+            onClick={() => setKeyDialogOpen(true)}
+          >
+            {t(lang, keySource === 'none' ? 'apiKeyButtonMissing' : 'apiKeyButton')}
+          </Button>
+        )}
         <div className="lang-toggle" role="group" aria-label="Language / 언어">
           <Button
             variant="secondary"
@@ -1837,7 +1854,12 @@ export default function App() {
 
       {error !== null && (
         <div className="error-banner" role="alert">
-          {error}
+          <span className="error-text">{error}</span>
+          {/API\s*키|API key/i.test(error) && appInfo?.fakeApi !== true && (
+            <Button variant="secondary" size="sm" onClick={() => setKeyDialogOpen(true)}>
+              {t(lang, keySource === 'none' ? 'apiKeyButtonMissing' : 'apiKeyButton')}
+            </Button>
+          )}
           <Button variant="ghost" size="sm" className="error-close" onClick={() => setError(null)}>
             {t(lang, 'close')}
           </Button>
@@ -2538,6 +2560,19 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+      {keyDialogOpen && keySource !== null && (
+        <ApiKeyDialog
+          lang={lang}
+          source={keySource}
+          onClose={() => setKeyDialogOpen(false)}
+          onChanged={(next, message) => {
+            setKeySource(next)
+            setKeyDialogOpen(false)
+            if (next !== 'none') setError((prev) => (prev !== null && /API\s*키|API key/i.test(prev) ? null : prev))
+            pushToast('info', message)
+          }}
+        />
       )}
       <ToastStack lang={lang} toasts={toasts} onDismiss={dismissToast} />
     </div>

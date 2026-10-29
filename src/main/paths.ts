@@ -34,3 +34,8 @@ export function mediaDirPath(dataDir: string = getDataDir()): string {
 export function settingsFilePath(dataDir: string = getDataDir()): string {
   return path.join(dataDir, 'settings.json')
 }
+
+/** The Meta API key typed into the app, encrypted with safeStorage. */
+export function apiKeyFilePath(dataDir: string = getDataDir()): string {
+  return path.join(dataDir, 'api-key.bin')
+}

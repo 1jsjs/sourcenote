@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type {
+  ApiKeySource,
   AppInfo,
   AppSettings,
   CheckProgressEvent,
@@ -78,6 +79,9 @@ const api: SourcenoteApi = {
   },
   getSettings: () => ipcRenderer.invoke('settings:get'),
   setSettings: (patch): Promise<AppSettings> => ipcRenderer.invoke('settings:set', patch),
+  getApiKeySource: (): Promise<ApiKeySource> => ipcRenderer.invoke('apikey:source'),
+  saveApiKey: (key): Promise<ApiKeySource> => ipcRenderer.invoke('apikey:save', key),
+  clearApiKey: (): Promise<ApiKeySource> => ipcRenderer.invoke('apikey:clear'),
   listSamples: (): Promise<SampleInfo[]> => ipcRenderer.invoke('samples:list'),
   importSample: (name): Promise<Note> => ipcRenderer.invoke('samples:import', name),
 }

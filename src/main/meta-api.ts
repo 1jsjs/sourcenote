@@ -36,7 +36,7 @@ export const CHAT_MODEL = 'muse-spark-1.3'
 export interface MetaApiDeps {
   ledger: LedgerStore
   /** Injectable for tests; defaults to keychain/env lookup. */
-  getKey?: () => Promise<string>
+  getKey?: (lang: AppLanguage) => Promise<string>
   /** Injectable for tests; defaults to global fetch. */
   fetchImpl?: typeof fetch
   /** Current app language for user-facing error text; defaults to 'ko'. */
@@ -98,6 +98,16 @@ export interface MetaApi {
   chat(opts: ChatOptions): Promise<unknown>
 }
 
+/** 401/403 means the key itself was refused: point the user at the key dialog. */
+function keyRefusedMessage(language: AppLanguage, status: number): string | null {
+  if (status !== 401 && status !== 403) return null
+  return langMsg(
+    language,
+    `Meta API가 키를 거부했습니다 (HTTP ${status}). 오른쪽 위 "API 키"에서 키를 확인해 주세요.`,
+    `Meta API refused the key (HTTP ${status}). Check it under "API key" at the top right.`,
+  )
+}
+
 /** Removes the API key from any text so it can never leak via errors. */
 function redact(text: string, key: string): string {
   return key.length > 0 ? text.split(key).join('***') : text
@@ -132,7 +142,7 @@ export function createMetaApi(deps: MetaApiDeps): MetaApi {
     reserve(estimate)
 
     try {
-      const key = await getKey()
+      const key = await getKey(language)
       const bytes = fs.readFileSync(opts.chunkPath)
 
       const requestJson = JSON.stringify({
@@ -175,6 +185,7 @@ export function createMetaApi(deps: MetaApiDeps): MetaApi {
         const body = await res.text().catch(() => '')
         const snippet = redact(body.slice(0, 500), key)
         throw new MetaApiError(
+          keyRefusedMessage(language, res.status) ??
           langMsg(
             language,
             `전사 API 오류 (HTTP ${res.status}): ${snippet}`,
@@ -208,7 +219,7 @@ export function createMetaApi(deps: MetaApiDeps): MetaApi {
     reserve(estimate)
 
     try {
-      const key = await getKey()
+      const key = await getKey(language)
 
       const body: Record<string, unknown> = { model, messages: opts.messages }
       if (opts.responseFormat) {
@@ -243,6 +254,7 @@ export function createMetaApi(deps: MetaApiDeps): MetaApi {
         const text = await res.text().catch(() => '')
         const snippet = redact(text.slice(0, 500), key)
         throw new MetaApiError(
+          keyRefusedMessage(language, res.status) ??
           langMsg(
             language,
             `요약 API 오류 (HTTP ${res.status}): ${snippet}`,

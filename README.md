@@ -37,23 +37,32 @@ Built during the Meta Global AI Developer Hackathon (Oct 27 – Nov 5, 2026).
 
 ## Requirements
 
-- macOS (the API key is read from the macOS keychain)
+- macOS on Apple Silicon (the signed DMG); the Windows build is not verified yet
 - Node 24+
 - ffmpeg: bundled via `ffmpeg-static`, falling back to `ffmpeg` on PATH
 - A Meta AI API key with access to `muse-voice-transcribe-1.0`
 
-## API key setup (macOS keychain)
+## API key
 
-Run interactively and type the key at the prompt — never paste it into files,
-docs, or shell history:
+Click **Add API key** at the top right and paste the key. The app encrypts it
+with Electron `safeStorage` (the macOS keychain or Windows DPAPI holds the
+encryption key) and stores only the encrypted bytes in the app data folder.
+The renderer never receives the key back; it only learns where the key in use
+comes from.
 
-```sh
-security add-generic-password -a "$USER" -s sourcenote-meta-api -w
-```
+The app looks for a key in this order:
 
-Alternatively set `SOURCENOTE_META_API_KEY` (takes precedence; useful for CI).
-The key is held in memory only and is never logged, persisted by the app, or
-sent to the renderer process.
+1. `SOURCENOTE_META_API_KEY` environment variable (useful for CI)
+2. the key saved in the app
+3. macOS keychain item `sourcenote-meta-api` (developer setup; run it
+   interactively and type the key at the prompt, never in files or history):
+
+   ```sh
+   security add-generic-password -a "$USER" -s sourcenote-meta-api -w
+   ```
+
+The key is never logged, written in plain text, or sent anywhere except the
+`Authorization` header of Meta API requests.
 
 ## Run
 
