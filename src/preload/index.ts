@@ -68,6 +68,8 @@ const api: SourcenoteApi = {
   },
   runCheck: (noteId, text) => ipcRenderer.invoke('check:run', noteId, text),
   getLatestCheck: (noteId) => ipcRenderer.invoke('check:getLatest', noteId),
+  askQuestion: (noteId, question) => ipcRenderer.invoke('qa:ask', noteId, question),
+  listQuestions: (noteId) => ipcRenderer.invoke('qa:list', noteId),
   onCheckProgress: (cb) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: CheckProgressEvent): void => {
       cb(payload)

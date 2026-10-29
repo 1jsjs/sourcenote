@@ -23,6 +23,7 @@ import {
   deleteNote,
   deleteSourceSegments,
   getLatestCheck,
+  listQuestionAnswers,
   getLatestSummary,
   getSource,
   listNotePages,
@@ -43,6 +44,7 @@ import { AUDIO_EXTENSIONS, classifyPaths } from './source-paths'
 import { runAudioPipeline } from './pipeline'
 import { importSampleNote, listSampleNotes, resolveSamplesDir } from './sample'
 import { loadSettings, parseSettings, saveSettings } from './settings'
+import { runQaPipeline } from './qa-pipeline'
 import { runSummaryPipeline } from './summary-pipeline'
 import {
   apiKeyFilePath,
@@ -525,6 +527,15 @@ function registerIpc(getWindow: () => BrowserWindow | null): void {
 
   ipcMain.handle('check:getLatest', (_e, noteId: unknown) =>
     typeof noteId === 'number' ? getLatestCheck(db, noteId) : null,
+  )
+
+  ipcMain.handle('qa:ask', (_e, noteId: unknown, question: unknown) => {
+    if (typeof noteId !== 'number') throw new Error('노트를 찾을 수 없습니다.')
+    return runQaPipeline({ db, metaApi, language: currentLanguage() }, noteId, question)
+  })
+
+  ipcMain.handle('qa:list', (_e, noteId: unknown) =>
+    typeof noteId === 'number' ? listQuestionAnswers(db, noteId) : [],
   )
 
   ipcMain.handle('sources:addAudio', async (_e, noteId: unknown) => {

@@ -606,6 +606,86 @@
           ]
         }
       ]
+    },
+    {
+      "kind": "qa",
+      "question": "학습률을 너무 크게 하면 어떻게 돼?",
+      "language": "ko",
+      "model": "muse-spark-1.3",
+      "status": "done",
+      "claims": [
+        {
+          "idx": 0,
+          "text": "학습률이 너무 크면 최소값을 지나쳐 손실이 오히려 발산할 수 있다.",
+          "verdict": "supported",
+          "reason": "트랜스크립트와 슬라이드 모두 학습률이 너무 크면 최소값을 지나쳐 손실이 발산할 수 있다고 명시하므로 주장이 완전히 뒷받침됩니다.",
+          "citations": [
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 3
+            }
+          ],
+          "pageCitations": [
+            {
+              "sourceIndex": 1,
+              "pageNo": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "qa",
+      "question": "미니 배치를 쓰면 뭐가 좋아?",
+      "language": "ko",
+      "model": "muse-spark-1.3",
+      "status": "done",
+      "claims": [
+        {
+          "idx": 0,
+          "text": "미니 배치를 쓰면 한 번에 업데이트가 더 빠르다.",
+          "verdict": "supported",
+          "reason": "인용된 자막과 슬라이드가 모두 미니배치 업데이트가 더 빠르다고 명시하므로 주장이 완전히 뒷받침된다.",
+          "citations": [
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 6
+            }
+          ],
+          "pageCitations": [
+            {
+              "sourceIndex": 1,
+              "pageNo": 3
+            }
+          ]
+        },
+        {
+          "idx": 1,
+          "text": "기울기에 약간의 잡음이 생겨 얕은 지역 최소값을 빠져나오는 데 도움이 된다.",
+          "verdict": "supported",
+          "reason": "인용된 자막과 슬라이드가 모두 기울기의 약간의 잡음이 얕은 지역 최소값 탈출에 도움이 된다고 명시하므로 주장이 완전히 뒷받침된다.",
+          "citations": [
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 6
+            }
+          ],
+          "pageCitations": [
+            {
+              "sourceIndex": 1,
+              "pageNo": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "qa",
+      "question": "트랜스포머의 어텐션은 어떻게 계산해?",
+      "language": "ko",
+      "model": "muse-spark-1.3",
+      "status": "done",
+      "claims": []
     }
   ]
 }

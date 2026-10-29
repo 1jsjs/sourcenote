@@ -1,5 +1,6 @@
 import { CHECK_LOCATE_SCHEMA_NAME } from './check-pipeline'
 import { CORRECTION_SCHEMA_NAME } from './correction'
+import { QA_SCHEMA_NAME } from './qa-pipeline'
 import { SUMMARY_SCHEMA_NAME, VERIFY_SCHEMA_NAME } from './grounding'
 import type { ChatMessage, ChatOptions, MetaApi, TranscribeChunkOptions } from './meta-api'
 import type { TranscribeResult } from './transcribe'
@@ -160,6 +161,11 @@ export function createFakeMetaApi(env: NodeJS.ProcessEnv = process.env): MetaApi
     const name = opts.responseFormat?.name
     const content = userContentOf(opts.messages)
     if (name === SUMMARY_SCHEMA_NAME) return buildFakeSummaryPayload(content)
+    if (name === QA_SCHEMA_NAME) {
+      // Two cited answer claims, like a short summary.
+      const { claims } = buildFakeSummaryPayload(content) as { claims: unknown[] }
+      return { claims: claims.slice(0, 2) }
+    }
     if (name === VERIFY_SCHEMA_NAME) return buildFakeVerifyPayload(content)
     if (name === CHECK_LOCATE_SCHEMA_NAME) return buildFakeLocatePayload(content)
     if (name === CORRECTION_SCHEMA_NAME) return buildFakeCorrectionPayload(content)

@@ -1,39 +1,22 @@
 import type { DatabaseSync } from 'node:sqlite'
 import type { AppLanguage, Summary, SummaryProgressEvent } from '../shared/types'
+import { createSummary, getLatestSummary, listNotePages, listNoteSegments, setSummaryStatus } from './db'
 import {
-  createSummary,
-  getLatestSummary,
-  insertClaimsWithCitations,
-  listNotePages,
-  listNoteSegments,
-  setClaimVerdict,
-  setSummaryStatus,
-  type NewClaim,
-} from './db'
-import {
-  applyVerifyResults,
   buildSummaryMessages,
-  buildVerifyMessages,
   DEFAULT_SUMMARY_MODEL,
-  formatSlideEvidence,
-  formatTranscriptEvidence,
   idByNumberMap,
   mapSummaryClaims,
   numberPages,
   numberSegments,
   pageIdByNumberMap,
-  splitBatches,
   SUMMARY_SCHEMA,
   SUMMARY_SCHEMA_NAME,
   validateSummaryPayload,
-  validateVerifyPayload,
-  VERIFY_SCHEMA,
-  VERIFY_SCHEMA_NAME,
   zeroCitationReason,
-  type VerifyItem,
 } from './grounding'
 import { langMsg } from './lang'
 import type { MetaApi } from './meta-api'
+import { storeAndVerifyClaims } from './verify-claims'
 
 /**
  * Summary pipeline: note segments and slide pages -> cited summary claims ->
@@ -87,58 +70,19 @@ export async function runSummaryPipeline(
     })
     const mapped = mapSummaryClaims(validateSummaryPayload(summaryRaw), byNumber, pageByNumber)
 
-    // Zero-citation claims are stored as unsupported and skip verification.
-    const toInsert: NewClaim[] = mapped.map((c) => ({
-      idx: c.idx,
-      text: c.text,
-      verdict:
-        c.segmentDbIds.length === 0 && c.pageDbIds.length === 0
-          ? 'unsupported'
-          : ('pending' as const),
-      reason:
-        c.segmentDbIds.length === 0 && c.pageDbIds.length === 0 ? zeroCitationReason(language) : null,
-      segmentIds: c.segmentDbIds,
-      pageIds: c.pageDbIds,
-    }))
-    const claimIds = insertClaimsWithCitations(db, summary.id, toInsert)
-    const claimIdByIdx = new Map(mapped.map((c, i) => [c.idx, claimIds[i]]))
-    const segmentByDbId = new Map(segments.map((s) => [s.id, s]))
-    const pageByDbId = new Map(pages.map((p) => [p.id, p]))
-
-    // 2. Verify each cited claim against ONLY its cited evidence, in batches.
-    report('verifying')
-    const verifiable = mapped.filter((c) => c.segmentDbIds.length + c.pageDbIds.length > 0)
-    for (const batch of splitBatches(verifiable)) {
-      const items: VerifyItem[] = batch.map((c) => ({
-        claimIdx: c.idx,
-        text: c.text,
-        citedTexts: [
-          ...c.segmentDbIds.map((id) => {
-            const s = segmentByDbId.get(id)
-            return formatTranscriptEvidence(s?.startMs ?? 0, s?.text ?? '')
-          }),
-          ...c.pageDbIds.map((id) => {
-            const p = pageByDbId.get(id)
-            return formatSlideEvidence(p?.pageNo ?? 0, p?.text ?? '')
-          }),
-        ],
-      }))
-      const verifyRaw = await metaApi.chat({
-        model,
-        messages: buildVerifyMessages(items, language),
-        responseFormat: { name: VERIFY_SCHEMA_NAME, schema: VERIFY_SCHEMA },
-      })
-      const resolved = applyVerifyResults(
-        items.map((item) => item.claimIdx),
-        validateVerifyPayload(verifyRaw),
-        language,
-      )
-      for (const r of resolved) {
-        const claimId = claimIdByIdx.get(r.claimIdx)
-        if (claimId === undefined) continue
-        setClaimVerdict(db, claimId, r.supported ? 'supported' : 'unsupported', r.reason)
-      }
-    }
+    // 2. Store, then verify each cited claim against ONLY its cited evidence.
+    await storeAndVerifyClaims({
+      db,
+      metaApi,
+      model,
+      language,
+      summaryId: summary.id,
+      claims: mapped,
+      segments,
+      pages,
+      zeroCitationReason: zeroCitationReason(language),
+      onVerifying: () => report('verifying'),
+    })
 
     setSummaryStatus(db, summary.id, 'done')
     report('done')

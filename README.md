@@ -18,6 +18,10 @@ What it does today:
   each claim must cite numbered transcript segments and/or slide pages.
 - **Verify**: a second Muse Spark call judges each claim against only its cited evidence.
 - **Check my notes**: paste your own notes; each sentence is matched to evidence and verified.
+- **Ask the lecture**: ask a question and get a short answer built only from the
+  recording and slides; every answer sentence cites its evidence and is verified the
+  same way. When the materials do not cover the question, Sourcenote says so instead
+  of answering from outside knowledge.
 - **Jump to the source**: click a time chip to play the lecture from that moment, or a
   page chip to open the slide.
 - **Budget guard**: every API call is checked against a local spend cap.
@@ -30,7 +34,7 @@ What it does today:
   `Transcribing 3/9`.
 - **Sample notes**: no API key? Click **Open sample note** in the sidebar
   (or pick one from the empty-state card) to import a bundled lecture with
-  transcript, slides, corrections and a verified summary — everything works
+  transcript, slides, corrections, a verified summary and answered questions — everything works
   offline except calls that need the API.
 
 Built during the Meta Global AI Developer Hackathon (Oct 27 – Nov 5, 2026).

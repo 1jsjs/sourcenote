@@ -1,9 +1,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
-import type { AppLanguage, Note, SampleInfo } from '../shared/types'
+import type { AppLanguage, Note, SampleInfo, Summary, SummaryKind } from '../shared/types'
 import {
   getLatestSummaryByKind,
+  listQuestionAnswers,
   getNote,
   listCorrections,
   listSegments,
@@ -73,7 +74,9 @@ export interface SampleClaim {
 }
 
 export interface SampleSummary {
-  kind: 'auto' | 'check'
+  kind: SummaryKind
+  /** The question a 'qa' summary answers; absent for other kinds. */
+  question?: string
   language: AppLanguage
   model: string
   status: 'summarizing' | 'verifying' | 'done' | 'error'
@@ -233,13 +236,19 @@ function parseClaim(raw: unknown): SampleClaim {
 
 function parseSummary(raw: unknown): SampleSummary {
   if (!isRecord(raw)) throw invalid('summary must be an object')
-  if (raw.kind !== 'auto' && raw.kind !== 'check') throw invalid('summary "kind" must be auto or check')
+  if (raw.kind !== 'auto' && raw.kind !== 'check' && raw.kind !== 'qa') {
+    throw invalid('summary "kind" must be auto, check or qa')
+  }
+  if (raw.kind === 'qa' && typeof raw.question !== 'string') {
+    throw invalid('a qa summary needs a "question" string')
+  }
   const status = raw.status
   if (status !== 'summarizing' && status !== 'verifying' && status !== 'done' && status !== 'error') {
     throw invalid('summary "status" is not a known summary status')
   }
   return {
     kind: raw.kind,
+    ...(raw.kind === 'qa' ? { question: raw.question as string } : {}),
     language: parseLanguage(raw.language),
     model: asString(raw, 'model'),
     status,
@@ -319,12 +328,19 @@ export function serializeSampleNote(db: DatabaseSync, noteId: number): SampleNot
     }
   })
 
-  const summaries: SampleSummary[] = []
+  // The latest summary and check, then every answered question in order.
+  const exported: Summary[] = []
   for (const kind of ['auto', 'check'] as const) {
     const summary = getLatestSummaryByKind(db, noteId, kind)
-    if (!summary) continue
+    if (summary) exported.push(summary)
+  }
+  exported.push(...listQuestionAnswers(db, noteId).filter((q) => q.status === 'done'))
+
+  const summaries: SampleSummary[] = []
+  for (const summary of exported) {
     summaries.push({
-      kind,
+      kind: summary.kind,
+      ...(summary.kind === 'qa' && summary.question !== null ? { question: summary.question } : {}),
       language: summary.language,
       model: summary.model,
       status: summary.status,
@@ -442,8 +458,8 @@ export function importSampleNote(db: DatabaseSync, sampleDir: string, dataDir: s
     }
 
     const summaryStmt = db.prepare(
-      'INSERT INTO summaries (note_id, model, status, error, created_at, kind, language) ' +
-        'VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO summaries (note_id, model, status, error, created_at, kind, language, question) ' +
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
     )
     const claimStmt = db.prepare(
       'INSERT INTO claims (summary_id, idx, text, verdict, reason) VALUES (?, ?, ?, ?, ?)',
@@ -463,6 +479,7 @@ export function importSampleNote(db: DatabaseSync, sampleDir: string, dataDir: s
         now,
         sampleSummary.kind,
         sampleSummary.language,
+        sampleSummary.question ?? null,
       )
       const summaryId = Number(summaryRes.lastInsertRowid)
       for (const claim of sampleSummary.claims) {

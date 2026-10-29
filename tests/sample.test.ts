@@ -15,6 +15,7 @@ import {
   insertSegments,
   listCorrections,
   listNotes,
+  listQuestionAnswers,
   listSources,
   openDb,
   setCorrectionStatus,
@@ -183,6 +184,45 @@ describe('sample-note format', () => {
     expect(autos).toHaveLength(1)
     expect(autos[0].claims).toHaveLength(1)
     expect(autos[0].claims[0].text).toBe('Newer claim.')
+  })
+
+  it('exports answered questions in order and imports them with the question', () => {
+    const noteId = seedRichNote()
+    const ask = (question: string, status: 'done' | 'error'): void => {
+      const qa = createSummary(db, noteId, 'muse-spark-1.3', 'qa', 'ko', question)
+      insertClaimsWithCitations(db, qa.id, [
+        { idx: 0, text: `${question} 답`, verdict: 'supported', reason: '근거 있음', segmentIds: [], pageIds: [] },
+      ])
+      setSummaryStatus(db, qa.id, status)
+    }
+    ask('첫 질문', 'done')
+    ask('실패한 질문', 'error')
+    ask('둘째 질문', 'done')
+    const sample = parseSampleNote(JSON.parse(JSON.stringify(serializeSampleNote(db, noteId))))
+    expect(sample.summaries.filter((q) => q.kind === 'qa').map((q) => q.question)).toEqual([
+      '첫 질문',
+      '둘째 질문',
+    ])
+
+    const sampleDir = path.join(dir, 'qa-sample')
+    fs.mkdirSync(sampleDir, { recursive: true })
+    fs.writeFileSync(path.join(sampleDir, 'note.json'), JSON.stringify(sample), 'utf8')
+    for (const source of listSources(db, noteId)) {
+      fs.copyFileSync(source.original_path, path.join(sampleDir, path.basename(source.original_path)))
+    }
+    const importDb = openDb(path.join(dir, 'qa-imported.sqlite'))
+    try {
+      const note = importSampleNote(importDb, sampleDir, path.join(dir, 'qa-data'))
+      expect(listQuestionAnswers(importDb, note.id).map((q) => [q.question, q.claims[0].text])).toEqual([
+        ['첫 질문', '첫 질문 답'],
+        ['둘째 질문', '둘째 질문 답'],
+      ])
+    } finally {
+      importDb.close()
+    }
+    expect(() =>
+      parseSampleNote({ ...sample, summaries: [{ ...sample.summaries.at(-1), question: undefined }] }),
+    ).toThrow('Invalid sample note')
   })
 
   it('rejects malformed sample JSON', () => {

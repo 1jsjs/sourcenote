@@ -127,12 +127,16 @@ export interface Summary {
   status: SummaryStatus
   error: string | null
   createdAt: string
-  /** 'auto' = generated summary, 'check' = user-notes check. */
-  kind: 'auto' | 'check'
+  /** 'auto' = generated summary, 'check' = user-notes check, 'qa' = a lecture question. */
+  kind: SummaryKind
   /** Language the claims/reasons were written in. Older rows read as 'ko'. */
   language: AppLanguage
+  /** The student's question (kind 'qa' only); the claims are the cited answer. */
+  question: string | null
   claims: Claim[]
 }
+
+export type SummaryKind = 'auto' | 'check' | 'qa'
 
 /** Sent over the `summary:progress` IPC channel. */
 export interface SummaryProgressEvent {
@@ -209,6 +213,10 @@ export interface SourcenoteApi {
   /** Checks the user's own notes sentences against the lecture evidence. */
   runCheck(noteId: number, text: string): Promise<Summary>
   getLatestCheck(noteId: number): Promise<Summary | null>
+  /** Answers a question from the note's lecture evidence only, with verified citations. */
+  askQuestion(noteId: number, question: string): Promise<Summary>
+  /** Every question asked about the note with its answer, oldest first. */
+  listQuestions(noteId: number): Promise<Summary[]>
   onCheckProgress(cb: (event: CheckProgressEvent) => void): () => void
   /** App metadata: fake-API badge flag and app version. */
   getAppInfo(): Promise<AppInfo>

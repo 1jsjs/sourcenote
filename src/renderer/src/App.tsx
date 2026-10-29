@@ -791,6 +791,14 @@ export default function App() {
   const [collapsingId, setCollapsingId] = useState<number | null>(null)
   const [flashSegmentId, setFlashSegmentId] = useState<number | null>(null)
   const [checkText, setCheckText] = useState('')
+  const [questions, setQuestions] = useState<Summary[]>([])
+  const [qaDraft, setQaDraft] = useState('')
+  /** The question being answered right now (shown above its skeleton). */
+  const [qaPending, setQaPending] = useState<string | null>(null)
+  /** Note whose question is in flight; a late answer for another note is dropped. */
+  const qaNoteRef = useRef<number | null>(null)
+  /** Id of the answer that just arrived (plays the claim reveal once). */
+  const [qaRevealId, setQaRevealId] = useState<number | null>(null)
   const [checkResult, setCheckResult] = useState<Summary | null>(null)
   const [checkRunning, setCheckRunning] = useState(false)
   const leftPaneRef = useRef<HTMLElement | null>(null)
@@ -970,18 +978,24 @@ export default function App() {
     setCheckResult(await window.sourcenote.getLatestCheck(noteId))
   }, [])
 
+  const refreshQuestions = useCallback(async (noteId: number) => {
+    setQuestions(await window.sourcenote.listQuestions(noteId))
+  }, [])
+
   useEffect(() => {
     if (selectedNoteId !== null) {
       void refreshSources(selectedNoteId)
       void refreshSummary(selectedNoteId)
       void refreshCorrections(selectedNoteId)
       void refreshCheck(selectedNoteId)
+      void refreshQuestions(selectedNoteId)
     } else {
       setSources([])
       setSegmentsBySource({})
       setSummary(null)
       setCorrections([])
       setCheckResult(null)
+      setQuestions([])
       setPages([])
       setPlayerSourceId(null)
       setActiveSegmentId(null)
@@ -990,6 +1004,10 @@ export default function App() {
     }
     // Each note starts clean: no leftover draft text, panes scrolled to the top.
     setCheckText('')
+    setQaDraft('')
+    setQaPending(null)
+    setQaRevealId(null)
+    qaNoteRef.current = null
     leftPaneRef.current?.scrollTo({ top: 0 })
     setSummaryRunning(false)
     setSummaryStage(null)
@@ -1010,7 +1028,7 @@ export default function App() {
     setPulsedClaimId(null)
     setDragging(false)
     dragDepth.current = 0
-  }, [selectedNoteId, refreshSources, refreshSummary, refreshCorrections, refreshCheck])
+  }, [selectedNoteId, refreshSources, refreshSummary, refreshCorrections, refreshCheck, refreshQuestions])
 
   useEffect(() => {
     const unsubscribe = window.sourcenote.onProgress((event) => {
@@ -1341,6 +1359,33 @@ export default function App() {
       reportError(err)
     } finally {
       setCorrectionBusyId(null)
+    }
+  }
+
+  const handleAsk = async (): Promise<void> => {
+    const question = qaDraft.trim()
+    if (selectedNoteId === null || question.length === 0 || qaPending !== null) return
+    const noteId = selectedNoteId
+    setError(null)
+    qaNoteRef.current = noteId
+    setQaPending(question)
+    setQaDraft('')
+    try {
+      const answer = await window.sourcenote.askQuestion(noteId, question)
+      if (qaNoteRef.current !== noteId) return
+      setQaRevealId(answer.id)
+      await refreshQuestions(noteId)
+      await refreshSpend()
+    } catch (err) {
+      if (qaNoteRef.current !== noteId) return
+      // Give the question back so it can be retried after fixing the cause.
+      setQaDraft(question)
+      reportError(err)
+    } finally {
+      if (qaNoteRef.current === noteId) {
+        qaNoteRef.current = null
+        setQaPending(null)
+      }
     }
   }
 
@@ -1795,6 +1840,16 @@ export default function App() {
     : !hasAudioDone
       ? t(lang, 'needSourceFirst')
       : undefined
+  const answeredQuestions = questions.filter((q) => q.status === 'done')
+  const qaButtonDisabled = qaPending !== null || !hasFinishedSource || qaDraft.trim().length === 0
+  const qaDisabledReason =
+    qaPending !== null
+      ? t(lang, 'runInProgress')
+      : !hasFinishedSource
+        ? t(lang, 'needSourceFirst')
+        : qaDraft.trim().length === 0
+          ? t(lang, 'enterQuestion')
+          : undefined
   const checkButtonDisabled = checkRunning || checkText.trim().length === 0
   const checkDisabledReason = checkRunning
     ? t(lang, 'runInProgress')
@@ -2416,6 +2471,75 @@ export default function App() {
                       )}
                     </div>
                   )}
+                  <div className="summary-block qa-block">
+                    <div className="section-head">
+                      <h3 id="qa-title" className="section-title">
+                        {t(lang, 'qaTitle')}
+                      </h3>
+                    </div>
+                    <p className="qa-hint">{t(lang, 'qaHint')}</p>
+                    {(answeredQuestions.length > 0 || qaPending !== null) && (
+                      <ol className="qa-thread">
+                        {answeredQuestions.map((qa) => (
+                          <li key={qa.id} className="qa-turn">
+                            <p className="qa-question">
+                              <span className="qa-question-label">{t(lang, 'qaYou')}</span>
+                              {qa.question}
+                            </p>
+                            {qa.claims.length === 0 ? (
+                              <p className="qa-empty">{t(lang, 'qaNoAnswer')}</p>
+                            ) : (
+                              <ClaimList
+                                lang={lang}
+                                claims={qa.claims}
+                                reveal={qaRevealId === qa.id}
+                                pulsedId={pulsedClaimId}
+                                onCiteSegment={handleCiteClick}
+                                onCitePage={handlePageCiteClick}
+                              />
+                            )}
+                          </li>
+                        ))}
+                        {qaPending !== null && (
+                          <li className="qa-turn" aria-busy="true">
+                            <p className="qa-question">
+                              <span className="qa-question-label">{t(lang, 'qaYou')}</span>
+                              {qaPending}
+                            </p>
+                            <SkeletonRows widths={[86, 64]} />
+                          </li>
+                        )}
+                      </ol>
+                    )}
+                    <form
+                      className="qa-form"
+                      onSubmit={(e) => {
+                        e.preventDefault()
+                        void handleAsk()
+                      }}
+                    >
+                      <input
+                        type="text"
+                        className="qa-input"
+                        aria-labelledby="qa-title"
+                        value={qaDraft}
+                        maxLength={500}
+                        placeholder={t(lang, 'qaPlaceholder')}
+                        onChange={(e) => setQaDraft(e.target.value)}
+                      />
+                      <Button
+                        type="submit"
+                        variant="secondary"
+                        size="md"
+                        loading={qaPending !== null}
+                        loadingLabel={t(lang, 'qaAnswering')}
+                        disabled={qaButtonDisabled}
+                        disabledReason={qaDisabledReason}
+                      >
+                        {t(lang, 'qaButton')}
+                      </Button>
+                    </form>
+                  </div>
                   <div
                     className="summary-block"
                     ref={(el) => {

@@ -13,6 +13,7 @@ import type {
   Source,
   SourceStatus,
   Summary,
+  SummaryKind,
   SummaryStatus,
 } from '../shared/types'
 import { isAppLanguage } from '../shared/types'
@@ -123,6 +124,10 @@ const MIGRATIONS: string[] = [
   // version 6: language the summary/check claims were written in (stage 5)
   `
   ALTER TABLE summaries ADD COLUMN language TEXT NOT NULL DEFAULT 'ko';
+  `,
+  // version 7: lecture Q&A stored as kind='qa' summaries with the question
+  `
+  ALTER TABLE summaries ADD COLUMN question TEXT;
   `,
 ]
 
@@ -389,21 +394,24 @@ export interface SummaryRow {
   created_at: string
   kind: string
   language: string
+  question?: string | null
 }
 
 export function createSummary(
   db: DatabaseSync,
   noteId: number,
   model: string,
-  kind: 'auto' | 'check' = 'auto',
+  kind: SummaryKind = 'auto',
   language: AppLanguage = 'ko',
+  question: string | null = null,
 ): SummaryRow {
   const created = new Date().toISOString()
   const res = db
     .prepare(
-      'INSERT INTO summaries (note_id, model, status, error, created_at, kind, language) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO summaries (note_id, model, status, error, created_at, kind, language, question) ' +
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
     )
-    .run(noteId, model, 'summarizing', null, created, kind, language)
+    .run(noteId, model, 'summarizing', null, created, kind, language, question)
   return {
     id: Number(res.lastInsertRowid),
     note_id: noteId,
@@ -413,6 +421,7 @@ export function createSummary(
     created_at: created,
     kind,
     language,
+    question,
   }
 }
 
@@ -579,13 +588,24 @@ export function listNotePages(db: DatabaseSync, noteId: number): NotePage[] {
 export function getLatestSummaryByKind(
   db: DatabaseSync,
   noteId: number,
-  kind: 'auto' | 'check',
+  kind: SummaryKind,
 ): Summary | null {
   const summary = db
     .prepare('SELECT * FROM summaries WHERE note_id = ? AND kind = ? ORDER BY id DESC LIMIT 1')
     .get(noteId, kind) as unknown as SummaryRow | null
-  if (!summary) return null
+  return summary ? loadSummary(db, summary) : null
+}
 
+/** Every question asked about a note with its answer, oldest first. */
+export function listQuestionAnswers(db: DatabaseSync, noteId: number): Summary[] {
+  const rows = db
+    .prepare("SELECT * FROM summaries WHERE note_id = ? AND kind = 'qa' ORDER BY id")
+    .all(noteId) as unknown as SummaryRow[]
+  return rows.map((row) => loadSummary(db, row))
+}
+
+/** A summary row with its claims and their cited segments and pages. */
+function loadSummary(db: DatabaseSync, summary: SummaryRow): Summary {
   const claimRows = db
     .prepare('SELECT * FROM claims WHERE summary_id = ? ORDER BY idx')
     .all(summary.id) as unknown as Array<{
@@ -634,8 +654,9 @@ export function getLatestSummaryByKind(
     status: summary.status,
     error: summary.error,
     createdAt: summary.created_at,
-    kind: (summary.kind === 'check' ? 'check' : 'auto') as 'auto' | 'check',
+    kind: summary.kind === 'check' || summary.kind === 'qa' ? summary.kind : 'auto',
     language,
+    question: summary.question ?? null,
     claims,
   }
 }

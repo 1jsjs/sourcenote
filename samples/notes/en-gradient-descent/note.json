@@ -435,6 +435,104 @@
           ]
         }
       ]
+    },
+    {
+      "kind": "qa",
+      "question": "What happens if the learning rate is too large?",
+      "language": "en",
+      "model": "muse-spark-1.3",
+      "status": "done",
+      "claims": [
+        {
+          "idx": 0,
+          "text": "A too-large learning rate causes the update to overshoot the minimum and the loss may diverge.",
+          "verdict": "supported",
+          "reason": "Both the transcript and slide explicitly state that too large a learning rate overshoots the minimum and may cause the loss to diverge.",
+          "citations": [
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 1
+            }
+          ],
+          "pageCitations": [
+            {
+              "sourceIndex": 1,
+              "pageNo": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "qa",
+      "question": "Why use mini-batches?",
+      "language": "en",
+      "model": "muse-spark-1.3",
+      "status": "done",
+      "claims": [
+        {
+          "idx": 0,
+          "text": "Mini-batches compute the gradient on a small batch of examples instead of the full dataset.",
+          "verdict": "supported",
+          "reason": "Both the transcript and slide explicitly state that the gradient is computed on a small batch or mini-batch instead of the full dataset.",
+          "citations": [
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 3
+            }
+          ],
+          "pageCitations": [
+            {
+              "sourceIndex": 1,
+              "pageNo": 3
+            }
+          ]
+        },
+        {
+          "idx": 1,
+          "text": "Each update is fast, giving faster updates per step.",
+          "verdict": "supported",
+          "reason": "Both the transcript stating each update is fast and the slide stating faster updates per step directly support the claim.",
+          "citations": [
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 4
+            }
+          ],
+          "pageCitations": [
+            {
+              "sourceIndex": 1,
+              "pageNo": 3
+            }
+          ]
+        },
+        {
+          "idx": 2,
+          "text": "The small gradient noise can help the model escape shallow local minima.",
+          "verdict": "supported",
+          "reason": "Both the transcript and slide explicitly state that small gradient noise can help escape shallow local minima.",
+          "citations": [
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 4
+            }
+          ],
+          "pageCitations": [
+            {
+              "sourceIndex": 1,
+              "pageNo": 3
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "qa",
+      "question": "How is attention computed in a transformer?",
+      "language": "en",
+      "model": "muse-spark-1.3",
+      "status": "done",
+      "claims": []
     }
   ]
 }
