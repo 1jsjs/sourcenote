@@ -37,7 +37,7 @@ Built during the Meta Global AI Developer Hackathon (Oct 27 – Nov 5, 2026).
 
 ## Requirements
 
-- macOS on Apple Silicon (the signed DMG); the Windows build is not verified yet
+- macOS on Apple Silicon (signed, notarized DMG) or Windows x64 (unsigned installer built in CI)
 - Node 24+
 - ffmpeg: bundled via `ffmpeg-static`, falling back to `ffmpeg` on PATH
 - A Meta AI API key with access to `muse-voice-transcribe-1.0`
@@ -119,6 +119,12 @@ xcrun notarytool store-credentials sourcenote-notary --apple-id <apple-id> --tea
 APPLE_KEYCHAIN_PROFILE=sourcenote-notary npm run dist:mac
 npm run notarize:dmg
 ```
+
+The Windows installer is built on every push to `main` by GitHub Actions
+(`.github/workflows/build.yml`, a `windows-latest` runner that also runs the
+typecheck and tests). Download it from the run's **Sourcenote-win-x64** artifact.
+It is not code-signed, so SmartScreen asks for confirmation on first launch
+(**More info** → **Run anyway**).
 
 ## How it was built
 

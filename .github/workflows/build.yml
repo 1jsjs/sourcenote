@@ -22,7 +22,7 @@ jobs:
       - run: npm run dist:win -- --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: Sourcenote-win-x64
           path: release/*.exe
