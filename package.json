@@ -11,6 +11,7 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "dist:mac": "electron-vite build && electron-builder --mac",
+    "notarize:dmg": "xcrun notarytool submit release/*.dmg --keychain-profile sourcenote-notary --wait && xcrun stapler staple release/*.dmg",
     "dist:win": "electron-vite build && electron-builder --win",
     "typecheck": "tsc --noEmit -p tsconfig.node.json --composite false && tsc --noEmit -p tsconfig.web.json --composite false",
     "test": "vitest run",

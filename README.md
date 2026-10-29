@@ -103,6 +103,13 @@ npm run dist:win   # release/Sourcenote-<version>-win-x64-setup.exe
 The sample notes are bundled, so a fresh install can open them without an API key.
 A Mac build is signed when a "Developer ID Application" certificate is in the keychain;
 `CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist:mac` builds an unsigned copy for local testing.
+To notarize, store a notarytool profile once, then build and notarize the DMG:
+
+```sh
+xcrun notarytool store-credentials sourcenote-notary --apple-id <apple-id> --team-id <team-id>
+APPLE_KEYCHAIN_PROFILE=sourcenote-notary npm run dist:mac
+npm run notarize:dmg
+```
 
 ## How it was built
 

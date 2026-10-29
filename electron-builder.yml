@@ -21,11 +21,11 @@ mac:
       arch: arm64
   category: public.app-category.education
   hardenedRuntime: true
-  # Signing and notarization turn on when a "Developer ID Application" identity
-  # is in the keychain and APPLE_KEYCHAIN_PROFILE names a notarytool profile.
-  notarize: false
+  # Signed when a "Developer ID Application" identity is in the keychain;
+  # notarized when APPLE_KEYCHAIN_PROFILE names a notarytool profile.
 dmg:
   artifactName: Sourcenote-${version}-mac-${arch}.dmg
+  sign: true
 win:
   target:
     - target: nsis
