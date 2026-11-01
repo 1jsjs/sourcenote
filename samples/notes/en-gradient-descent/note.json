@@ -7,76 +7,68 @@
       "kind": "audio",
       "file": "demo-lecture-en.m4a",
       "displayName": "demo-lecture-en.m4a",
-      "durationMs": 71420,
+      "durationMs": 83712,
       "segments": [
         {
           "idx": 0,
-          "startMs": 0,
-          "endMs": 13340,
-          "text": "Today we are going to talk about gradient descent. The model moves its weights a little at a time in the direction that lowers the loss function. How far it moves in one step is set by the learning rate.",
-          "originalText": "Today we are going to talk about gradient descent. The model moves its weights a little at a time in the direction that lowers the loss function. How far it moves in one one step is set by the learning rate.",
+          "startMs": 300,
+          "endMs": 16300,
+          "text": "Today we're going to talk about gradient descent. The model moves its weights a little at a time in the direction that lowers the loss function. How far it moves in one step is set by the learning rate.",
+          "originalText": null,
           "chunkIndex": 0
         },
         {
           "idx": 1,
-          "startMs": 15020,
-          "endMs": 20540,
-          "text": "If the learning rate is too large, the update overshoots the minimum and the loss can actually diverge",
+          "startMs": 18860,
+          "endMs": 25100,
+          "text": "If the learning rate is too large, the update overshoots the minimum and the loss can actually diverge.",
           "originalText": null,
           "chunkIndex": 0
         },
         {
           "idx": 2,
-          "startMs": 21900,
-          "endMs": 27180,
+          "startMs": 27420,
+          "endMs": 32940,
           "text": "If it is too small, training becomes very slow and may not converge within the epochs you have.",
           "originalText": null,
           "chunkIndex": 0
         },
         {
           "idx": 3,
-          "startMs": 28700,
-          "endMs": 37260,
-          "text": "Instead of using the whole data set at once, we can compute the gradient on a small batch of examples, this is called stochastic gradient descent.",
-          "originalText": "Instead of using the whole data set at once, we can we can compute the gradient on a small batch batch of examples, this is called stochastic gradient descent.",
+          "startMs": 35420,
+          "endMs": 44700,
+          "text": "Instead of using the whole data set at once, we can compute the gradient on a small batch of examples this is called stochastic gradient descent",
+          "originalText": null,
           "chunkIndex": 0
         },
         {
           "idx": 4,
-          "startMs": 38860,
-          "endMs": 46060,
-          "text": "with mini batches each update is fast and the small amount of noise in the gradient can even help the model escape shallow local minima.",
+          "startMs": 47180,
+          "endMs": 55580,
+          "text": "With mini batches each update is fast and the small amount of noise in the gradient can even help the model escape shallow local minima.",
           "originalText": null,
           "chunkIndex": 0
         },
         {
           "idx": 5,
-          "startMs": 47660,
-          "endMs": 54780,
-          "text": "In practice, people often start with a large learning rate and shrink it over time. This is called learning rate scheduling.",
-          "originalText": "In practice, people often start with start with a large learning rate and shrink it over time. This is called learning rate scheduling.",
+          "startMs": 58060,
+          "endMs": 66060,
+          "text": "In practice people often start with a large learning rate and shrink it over time this is called learning rate scheduling",
+          "originalText": "In practice people often start with a large learning rate and shrink it over over time this is called learning rate scheduling",
           "chunkIndex": 0
         },
         {
           "idx": 6,
-          "startMs": 56220,
-          "endMs": 64620,
+          "startMs": 68620,
+          "endMs": 77340,
           "text": "Two common schedules are step decay which halves the learning rate every few epochs and cosine annealing which lowers it along a cosine curve.",
-          "originalText": null,
+          "originalText": "Two common schedules are step decay which halves the learning rate every few epochs and cosine annealing which lowers lowers it along a cosine curve.",
           "chunkIndex": 0
         },
         {
           "idx": 7,
-          "startMs": 64700,
-          "endMs": 64700,
-          "text": "curve.",
-          "originalText": null,
-          "chunkIndex": 0
-        },
-        {
-          "idx": 8,
-          "startMs": 66300,
-          "endMs": 69660,
+          "startMs": 79900,
+          "endMs": 82860,
           "text": "Next time we'll cover momentum and the Adam optimizer.",
           "originalText": null,
           "chunkIndex": 0
@@ -113,37 +105,19 @@
   "corrections": [
     {
       "sourceIndex": 0,
-      "segmentIdx": 0,
-      "before": "one one",
-      "after": "one",
-      "reason": "Accidental repetition of the word 'one'.",
-      "kind": "duplicate",
-      "status": "accepted"
-    },
-    {
-      "sourceIndex": 0,
-      "segmentIdx": 3,
-      "before": "we can we can",
-      "after": "we can",
-      "reason": "Accidental repetition of the phrase 'we can'.",
-      "kind": "duplicate",
-      "status": "accepted"
-    },
-    {
-      "sourceIndex": 0,
-      "segmentIdx": 3,
-      "before": "batch batch",
-      "after": "batch",
-      "reason": "Accidental repetition of the word 'batch'.",
-      "kind": "duplicate",
-      "status": "accepted"
-    },
-    {
-      "sourceIndex": 0,
       "segmentIdx": 5,
-      "before": "start with start with",
-      "after": "start with",
-      "reason": "Accidental repetition of the phrase 'start with'.",
+      "before": "over over",
+      "after": "over",
+      "reason": "Accidental repetition of the word 'over'.",
+      "kind": "duplicate",
+      "status": "accepted"
+    },
+    {
+      "sourceIndex": 0,
+      "segmentIdx": 6,
+      "before": "lowers lowers",
+      "after": "lowers",
+      "reason": "Accidental repetition of the word 'lowers'.",
       "kind": "duplicate",
       "status": "accepted"
     }
@@ -157,9 +131,9 @@
       "claims": [
         {
           "idx": 0,
-          "text": "Gradient descent moves weights a little at a time in the direction that lowers the loss function.",
+          "text": "Gradient descent updates model weights incrementally in the direction that reduces the loss function.",
           "verdict": "supported",
-          "reason": "Transcript explicitly states the model moves weights a little at a time in the direction that lowers the loss function.",
+          "reason": "Both the transcript and slide state the model moves weights a little at a time in the direction that lowers the loss function.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -175,9 +149,9 @@
         },
         {
           "idx": 1,
-          "text": "The learning rate sets how far the model moves in one step.",
+          "text": "The learning rate sets how far the weights move in each update step.",
           "verdict": "supported",
-          "reason": "Transcript explicitly states how far it moves in one step is set by the learning rate.",
+          "reason": "Both the transcript and slide state the learning rate sets how far the model moves in one step or the step size of each update.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -193,9 +167,9 @@
         },
         {
           "idx": 2,
-          "text": "If the learning rate is too large, the update overshoots the minimum and the loss may diverge.",
+          "text": "A learning rate that is too large causes the update to overshoot the minimum and the loss may diverge.",
           "verdict": "supported",
-          "reason": "Both transcript and slide explicitly state too large overshoots the minimum and loss may diverge.",
+          "reason": "Both the transcript and slide state too large a learning rate overshoots the minimum and the loss may or can diverge.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -211,9 +185,9 @@
         },
         {
           "idx": 3,
-          "text": "If the learning rate is too small, training becomes very slow and may not converge within the available epochs.",
+          "text": "A learning rate that is too small makes training very slow and it may not converge within the available epochs.",
           "verdict": "supported",
-          "reason": "Both transcript and slide explicitly state too small means slow training and may not converge within the epochs.",
+          "reason": "Both the transcript and slide state too small a learning rate makes training slow or very slow and may not converge within the epochs.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -229,9 +203,9 @@
         },
         {
           "idx": 4,
-          "text": "Stochastic gradient descent computes the gradient on a small batch of examples instead of using the whole dataset at once.",
+          "text": "Stochastic gradient descent computes the gradient on a small mini-batch of examples instead of the full dataset.",
           "verdict": "supported",
-          "reason": "Both transcript and slide explicitly define SGD as computing the gradient on a small batch instead of the whole dataset.",
+          "reason": "The transcript defines computing the gradient on a small batch as stochastic gradient descent and the slide states computing the gradient on a mini-batch instead of the full dataset.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -247,9 +221,9 @@
         },
         {
           "idx": 5,
-          "text": "With mini-batches, each update is fast.",
+          "text": "Updates with mini-batches are fast.",
           "verdict": "supported",
-          "reason": "Both transcript and slide explicitly state mini-batch updates are fast or faster per step.",
+          "reason": "The transcript states each mini-batch update is fast and the slide states faster updates per step.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -265,9 +239,9 @@
         },
         {
           "idx": 6,
-          "text": "The small amount of noise in the gradient can help the model escape shallow local minima.",
+          "text": "The small noise in mini-batch gradients can help the model escape shallow local minima.",
           "verdict": "supported",
-          "reason": "Both transcript and slide explicitly state gradient noise can help escape shallow local minima.",
+          "reason": "Both the transcript and slide state the small noise in the gradient can help escape shallow local minima.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -283,22 +257,27 @@
         },
         {
           "idx": 7,
-          "text": "In practice, training often starts with a large learning rate that is shrunk over time, which is called learning rate scheduling.",
-          "verdict": "supported",
-          "reason": "Transcript explicitly states starting with a large learning rate and shrinking it over time is called learning rate scheduling.",
+          "text": "Learning rate scheduling starts with a large learning rate and shrinks it over time.",
+          "verdict": "unsupported",
+          "reason": "The transcript only says people often start large and shrink it, and the cited slide lists warmup starting small, so the universal claim is an unsupported generalization.",
           "citations": [
             {
               "sourceIndex": 0,
               "segmentIdx": 5
             }
           ],
-          "pageCitations": []
+          "pageCitations": [
+            {
+              "sourceIndex": 1,
+              "pageNo": 4
+            }
+          ]
         },
         {
           "idx": 8,
           "text": "Step decay halves the learning rate every few epochs.",
           "verdict": "supported",
-          "reason": "Both transcript and slide explicitly define step decay as halving the learning rate every few epochs.",
+          "reason": "Both the transcript and slide state step decay halves the learning rate every few epochs.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -314,17 +293,13 @@
         },
         {
           "idx": 9,
-          "text": "Cosine annealing lowers the learning rate along a cosine curve.",
+          "text": "Cosine annealing decreases the learning rate along a cosine curve.",
           "verdict": "supported",
-          "reason": "Both transcript and slide explicitly state cosine annealing lowers or decreases along a cosine curve.",
+          "reason": "Both the transcript and slide state cosine annealing lowers or decreases along a cosine curve.",
           "citations": [
             {
               "sourceIndex": 0,
               "segmentIdx": 6
-            },
-            {
-              "sourceIndex": 0,
-              "segmentIdx": 7
             }
           ],
           "pageCitations": [
@@ -338,7 +313,7 @@
           "idx": 10,
           "text": "Warmup starts small and increases the learning rate during the first 5 epochs.",
           "verdict": "supported",
-          "reason": "Slide explicitly states warmup starts small and increases the learning rate during the first 5 epochs.",
+          "reason": "The cited slide explicitly states warmup starts small and increases the learning rate during the first 5 epochs.",
           "citations": [],
           "pageCitations": [
             {
@@ -351,11 +326,11 @@
           "idx": 11,
           "text": "The next lecture will cover momentum and the Adam optimizer.",
           "verdict": "supported",
-          "reason": "Both transcript and slide explicitly state momentum and Adam optimizer are next.",
+          "reason": "Both the transcript and slide state momentum and the Adam optimizer are next or to be covered next time.",
           "citations": [
             {
               "sourceIndex": 0,
-              "segmentIdx": 8
+              "segmentIdx": 7
             }
           ],
           "pageCitations": [
@@ -377,7 +352,7 @@
           "idx": 0,
           "text": "If the learning rate is too large, the loss can diverge.",
           "verdict": "supported",
-          "reason": "Both the transcript and slide state that too large a learning rate overshoots the minimum and the loss can/may diverge, which directly matches the claim.",
+          "reason": "Both the transcript and slide state that too large a learning rate overshoots the minimum and the loss can or may diverge.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -397,10 +372,6 @@
           "verdict": "unsupported",
           "reason": "The evidence only says noise can help escape shallow local minima, not that it always makes training more accurate.",
           "citations": [
-            {
-              "sourceIndex": 0,
-              "segmentIdx": 3
-            },
             {
               "sourceIndex": 0,
               "segmentIdx": 4
@@ -425,7 +396,7 @@
           "idx": 3,
           "text": "Warmup increases the learning rate during the first 5 epochs.",
           "verdict": "supported",
-          "reason": "The slide explicitly defines warmup as starting small and increasing the learning rate during the first 5 epochs, which matches the claim.",
+          "reason": "The slide explicitly defines warmup as starting small and increasing the learning rate during the first 5 epochs.",
           "citations": [],
           "pageCitations": [
             {
@@ -445,9 +416,9 @@
       "claims": [
         {
           "idx": 0,
-          "text": "A too-large learning rate causes the update to overshoot the minimum and the loss may diverge.",
+          "text": "If the learning rate is too large, the update overshoots the minimum and the loss may diverge.",
           "verdict": "supported",
-          "reason": "Both the transcript and slide explicitly state that too large a learning rate overshoots the minimum and may cause the loss to diverge.",
+          "reason": "Both cited sources state that too large a learning rate overshoots the minimum and may cause the loss to diverge.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -472,28 +443,14 @@
       "claims": [
         {
           "idx": 0,
-          "text": "Mini-batches compute the gradient on a small batch of examples instead of the full dataset.",
+          "text": "Mini-batches compute the gradient on a small batch instead of the full dataset, so each update is fast.",
           "verdict": "supported",
-          "reason": "Both the transcript and slide explicitly state that the gradient is computed on a small batch or mini-batch instead of the full dataset.",
+          "reason": "Both the transcript segments and the slide state that the gradient is computed on a small batch instead of the full dataset and that each update is fast.",
           "citations": [
             {
               "sourceIndex": 0,
               "segmentIdx": 3
-            }
-          ],
-          "pageCitations": [
-            {
-              "sourceIndex": 1,
-              "pageNo": 3
-            }
-          ]
-        },
-        {
-          "idx": 1,
-          "text": "Each update is fast, giving faster updates per step.",
-          "verdict": "supported",
-          "reason": "Both the transcript stating each update is fast and the slide stating faster updates per step directly support the claim.",
-          "citations": [
+            },
             {
               "sourceIndex": 0,
               "segmentIdx": 4
@@ -507,10 +464,10 @@
           ]
         },
         {
-          "idx": 2,
-          "text": "The small gradient noise can help the model escape shallow local minima.",
+          "idx": 1,
+          "text": "The small noise in the mini-batch gradient can help the model escape shallow local minima.",
           "verdict": "supported",
-          "reason": "Both the transcript and slide explicitly state that small gradient noise can help escape shallow local minima.",
+          "reason": "Both the transcript segment and the slide explicitly state that small gradient noise can help escape shallow local minima.",
           "citations": [
             {
               "sourceIndex": 0,

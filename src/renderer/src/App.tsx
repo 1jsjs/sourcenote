@@ -720,7 +720,7 @@ function LandingPreview({ lang }: { lang: AppLanguage }) {
                   <span className="chip-icon">
                     <WaveformIcon />
                   </span>
-                  0:21
+                  0:16
                 </span>
               </span>
               <span className="chip-wrap">
