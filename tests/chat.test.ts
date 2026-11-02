@@ -6,6 +6,7 @@ import {
   BudgetExceededError,
   chatCostUsd,
   estimateChatCostUsd,
+  IMAGE_ESTIMATE_CHARS,
   LedgerStore,
 } from '../src/main/budget'
 import { CHAT_MODEL, createMetaApi, type MetaApiDeps } from '../src/main/meta-api'
@@ -182,5 +183,27 @@ describe('meta-api chat', () => {
     const api = createMetaApi(deps)
     await expect(api.chat({ messages })).rejects.toThrow(BudgetExceededError)
     expect(captured).toHaveLength(0)
+  })
+
+  it('counts text parts and a fixed per-image estimate in the pre-call budget check', async () => {
+    const { deps, ledger } = makeDeps(tmpDir, () => jsonResponse(chatBody('{"ok":true}')))
+    const assertSpy = vi.spyOn(ledger, 'assertCanSpend')
+    const api = createMetaApi(deps)
+    await api.chat({
+      messages: [
+        { role: 'system', content: 'system prompt' },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'slide text' },
+            { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,AAAA' } },
+            { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,BBBB' } },
+          ],
+        },
+      ],
+    })
+    const chars = 'system prompt'.length + 'slide text'.length + 2 * IMAGE_ESTIMATE_CHARS
+    expect(assertSpy).toHaveBeenCalledTimes(1)
+    expect(assertSpy.mock.calls[0][0]).toBeCloseTo(estimateChatCostUsd(CHAT_MODEL, chars), 12)
   })
 })

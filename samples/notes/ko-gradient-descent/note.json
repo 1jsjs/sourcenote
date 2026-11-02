@@ -7,84 +7,100 @@
       "kind": "audio",
       "file": "demo-lecture.m4a",
       "displayName": "demo-lecture.m4a",
-      "durationMs": 94439,
+      "durationMs": 109135,
       "segments": [
         {
           "idx": 0,
-          "startMs": 140,
-          "endMs": 7740,
-          "text": "오늘은 경사 하강법, 영어로 gradient descent를 다루겠습니다.",
-          "originalText": "오늘은 경사 하강법, 영어로 그레디언트 디센트를 다루겠습니다.",
+          "startMs": 220,
+          "endMs": 5020,
+          "text": "오늘은 경사 하강법 영어로 Gradient Descent를 다루겠습니다.",
+          "originalText": "오늘은 경사 하강법 영어로 그레디언트디언트 디센트를 다루겠습니다.",
           "chunkIndex": 0
         },
         {
           "idx": 1,
-          "startMs": 8060,
-          "endMs": 13820,
-          "text": "모델은 손실 함수, 즉 loss function의 값을 줄이는 방향으로 가중치를 조금씩 움직입니다.",
-          "originalText": "모델은 손실 함수, 즉 로스 펑션의 값을 줄이는 방향으로 가중치를 조금씩 움직입니다.",
+          "startMs": 7420,
+          "endMs": 13900,
+          "text": "모델은 손실 함수 즉 loss function의 값을 줄이는 방향으로 가중치를 조금씩 움직입니다.",
+          "originalText": "모델은 손실 함수 즉 로스 펑션의 값을 줄이는 방향으로 가중치를 조금씩 움직입니다.",
           "chunkIndex": 0
         },
         {
           "idx": 2,
           "startMs": 16380,
-          "endMs": 22220,
-          "text": "이때 한 번에 얼마나 움직일지를 정하는 값이 learning rate, 우리말로 학습률입니다.",
-          "originalText": "이때 한 번에 얼마나 움직일지를 정하는 값이 러닝 레이트, 우리말로 우리말로 학습률입니다.",
+          "endMs": 22540,
+          "text": "이때 한 번에 얼마나 움직일지를 정하는 값이 learning rate 우리말로 학습률입니다.",
+          "originalText": "이때 한 번에 얼마나 움직일지를 정하는 값이 값이 러닝 레이트 우리말로 학습률입니다.",
           "chunkIndex": 0
         },
         {
           "idx": 3,
           "startMs": 25340,
-          "endMs": 30620,
+          "endMs": 30700,
           "text": "learning rate가 너무 크면 최솟값을 지나쳐서 손실이 오히려 발산할 수 있습니다.",
           "originalText": "러닝 레이트가 너무 크면 최솟값을 지나쳐서 손실이 오히려 발산할 수 있습니다.",
           "chunkIndex": 0
         },
         {
           "idx": 4,
-          "startMs": 33420,
-          "endMs": 39420,
-          "text": "반대로 너무 작으면 학습이 매우 느려지고 정해진 에포크 간에 수렴하지 못할 수 있습니다.",
-          "originalText": "반대로 너무 작으면 학습이 매우 느려지고 정해진 에포 간에 수렴하지 못할 수 있습니다.",
+          "startMs": 33500,
+          "endMs": 39500,
+          "text": "반대로 너무 작으면 학습이 매우 느려지고 정해진 epochs 안에 수렴하지 못할 수 있습니다.",
+          "originalText": "반대로 너무 작으면 학습이 매우 느려지고 정해진 에폭 안에 수렴하지 못할 수 있습니다.",
           "chunkIndex": 0
         },
         {
           "idx": 5,
           "startMs": 42220,
-          "endMs": 52540,
-          "text": "데이터 전체를 한 번에 쓰는 대신 작은 묶음, 즉 mini-batch로 나눠서 기울기를 계산하는 방법을 stochastic gradient descent라고 부릅니다.",
-          "originalText": "데이터 전체를 한 번에 쓰는 대신 작은 묶음, 즉 미니 배치로 나눠서 기울기를 계산하는 방법을 스토캐스틱 그레이디언트 디센트라고 부릅니다.",
+          "endMs": 48780,
+          "text": "슬라이드에 그래프는 같은 모델을 학습률 세 가지로 학습시켰을 때의 손실 곡선입니다.",
+          "originalText": null,
           "chunkIndex": 0
         },
         {
           "idx": 6,
-          "startMs": 55340,
-          "endMs": 65020,
-          "text": "mini-batch를 쓰면 한 번에 업데이트가 빠르고 기울기에 약간의 잡음이 생겨서 얕은 지역 최솟값을 빠져나오는 데 도움이 되기도 합니다.",
-          "originalText": "미니 배치를 쓰면 한 번에 업데이트가 빠르고 기울기에 약간의 잡음이 생겨서 얕은 지역 최솟값을 빠져나오는 데 도움이 되기도 합니다.",
+          "startMs": 49180,
+          "endMs": 54540,
+          "text": "곡선 모양이 학습률마다 어떻게 다른지 그래프에서 직접 확인해 보세요.",
+          "originalText": null,
           "chunkIndex": 0
         },
         {
           "idx": 7,
-          "startMs": 67900,
-          "endMs": 74940,
-          "text": "실무에서는 학습 초반에 learning rate를 크게 두고 점점 줄이는 learning rate scheduling을 많이 씁니다.",
-          "originalText": "실무에서는실무에서는 학습 초반에 러닝 러닝 레이트를 크게 두고 점점 줄이는 러닝 레이트 스케줄링을 많이 씁니다.",
+          "startMs": 56860,
+          "endMs": 67100,
+          "text": "데이터 전체를 한 번에 쓰는 대신 작은 묶음, 즉 mini-batch로 나눠서 기울기를 계산하는 방법을 Stochastic Gradient Descent라고 부릅니다.",
+          "originalText": "데이터 전체를 한 번에 쓰는 대신 작은 묶음, 즉 미니 배치로 나눠서 기울기를 계산하는 방법을 스토캐스틱 그레이디언트 디센트라고 부릅니다.",
           "chunkIndex": 0
         },
         {
           "idx": 8,
-          "startMs": 77820,
-          "endMs": 86620,
-          "text": "대표적인 방법으로 일정 에포크마다 절반으로 줄이는 step decay와 코사인 곡선을 따라 줄이는 cosine annealing이 있습니다.",
-          "originalText": "대표적인대표적인 방법으로 일정 에포크마다 절반으로 줄이는 스텝 디케이와 코사인 곡선을 따라 줄이는 코사인 어닐링이 있습니다.",
+          "startMs": 70140,
+          "endMs": 79740,
+          "text": "mini-batch를 쓰면 한 번에 업데이트가 빠르고 기울기에 약간의 잡음이 생겨서 얕은 지역 최솟값을 빠져나오는 데 도움이 되기도 합니다.",
+          "originalText": "미니 배치를 쓰면 한 번에 업데이트가 빠르고 기울기에 약간의 약간의 잡음이 생겨서 얕은 지역 최솟값을 빠져나오는 데 도움이 되기도 합니다.",
           "chunkIndex": 0
         },
         {
           "idx": 9,
-          "startMs": 89580,
-          "endMs": 93660,
+          "startMs": 82700,
+          "endMs": 89740,
+          "text": "실무에서는 학습 초반에 learning rate를 크게 두고 점점 줄이는 Learning Rate Scheduling을 많이 씁니다.",
+          "originalText": "실무에서는 학습 초반에 러닝 레이트를 크게 두고 점점 줄이는 러닝 레이트 스케줄링을 많이 씁니다.",
+          "chunkIndex": 0
+        },
+        {
+          "idx": 10,
+          "startMs": 92540,
+          "endMs": 101420,
+          "text": "대표적인 방법으로 일정 epochs마다 절반으로 줄이는 Step decay와 코사인 곡선을 따라 줄이는 Cosine annealing이 있습니다.",
+          "originalText": "대표적인 방법으로 일정 에폭마다 절반으로 줄이는 스텝 디케이와 코사인 곡선을 따라 줄이는 코사인 어닐링이 있습니다.",
+          "chunkIndex": 0
+        },
+        {
+          "idx": 11,
+          "startMs": 104220,
+          "endMs": 108140,
           "text": "다음 시간에는 Momentum과 Adam optimizer를 다루겠습니다.",
           "originalText": "다음 시간에는 모멘텀과 아담 옵티마이저를 다루겠습니다.",
           "chunkIndex": 0
@@ -101,19 +117,28 @@
       "pages": [
         {
           "pageNo": 1,
-          "text": "Gradient \u0001 Descent \u0001 & \u0001 Learning \u0001 Rate\n경사 \u0001 하강법과 \u0001 학습률 \u0001 · \u0001 Week \u0001 4\n1"
+          "text": "Gradient \u0001 Descent \u0001 & \u0001 Learning \u0001 Rate\n경사 \u0001 하강법과 \u0001 학습률 \u0001 · \u0001 Week \u0001 4\n1",
+          "visualText": ""
         },
         {
           "pageNo": 2,
-          "text": "Gradient \u0001 Descent\nUpdate \u0001 weights \u0001 in \u0001 the \u0001 direction \u0001 that \u0001 lowers \u0001 the \u0001 loss \u0001 function\nLearning \u0001 rate \u0001 (학습률): \u0001 step \u0001 size \u0001 of \u0001 each \u0001 update\nToo \u0001 large \u0001 → \u0001 overshoots \u0001 the \u0001 minimum, \u0001 loss \u0001 may \u0001 diverge\nToo \u0001 small \u0001 → \u0001 slow \u0001 training, \u0001 may \u0001 not \u0001 converge \u0001 within \u0001 the \u0001 epochs\n2"
+          "text": "Gradient \u0001 Descent\nUpdate \u0001 weights \u0001 in \u0001 the \u0001 direction \u0001 that \u0001 lowers \u0001 the \u0001 loss \u0001 function\nLearning \u0001 rate \u0001 (학습률): \u0001 step \u0001 size \u0001 of \u0001 each \u0001 update\nToo \u0001 large \u0001 → \u0001 overshoots \u0001 the \u0001 minimum, \u0001 loss \u0001 may \u0001 diverge\nToo \u0001 small \u0001 → \u0001 slow \u0001 training, \u0001 may \u0001 not \u0001 converge \u0001 within \u0001 the \u0001 epochs\n2",
+          "visualText": ""
         },
         {
           "pageNo": 3,
-          "text": "Stochastic \u0001 Gradient \u0001 Descent \u0001 (SGD)\nCompute \u0001 the \u0001 gradient \u0001 on \u0001 a \u0001 mini-batch \u0001 instead \u0001 of \u0001 the \u0001 full \u0001 dataset\nFaster \u0001 updates \u0001 per \u0001 step\nGradient \u0001 noise \u0001 can \u0001 help \u0001 escape \u0001 shallow \u0001 local \u0001 minima\n3"
+          "text": "Learning \u0001 Rate \u0001 Comparison\n0\n1\n2\n3\n0 5 10 15 20\nEpoch\nLoss\nlr \u0001 = \u0001 1.0\nlr \u0001 = \u0001 0.1\nlr \u0001 = \u0001 0.001\n3",
+          "visualText": "x축 Epoch 0부터 20, y축 Loss 0부터 3인 선 그래프. 세 계열 모두 Epoch 0에서 약 2.3에서 시작. 검정 실선 lr=0.1은 급격히 하락해 Epoch 5 이후 0 근처에서 수평 유지. 파랑 점선 lr=0.001은 완만하게 직선적으로 하락해 Epoch 20에서 약 1.4. 적갈색 파선 lr=1.0은 크게 지그재그 진동하며 진폭 증가, Epoch 8 부근에 3을 초과해 화면 밖으로 상승. 범례는 그래프 우측에 위치."
         },
         {
           "pageNo": 4,
-          "text": "Learning \u0001 Rate \u0001 Scheduling\nStep \u0001 decay : \u0001 halve \u0001 the \u0001 learning \u0001 rate \u0001 every \u0001 few \u0001 epochs\nCosine \u0001 annealing : \u0001 decrease \u0001 along \u0001 a \u0001 cosine \u0001 curve\nWarmup : \u0001 start \u0001 small \u0001 and \u0001 increase \u0001 the \u0001 learning \u0001 rate \u0001 during \u0001 the \u0001 first \u0001 5 \u0001 epochs\nNext: \u0001 Momentum, \u0001 Adam \u0001 optimizer\n4"
+          "text": "Stochastic \u0001 Gradient \u0001 Descent \u0001 (SGD)\nCompute \u0001 the \u0001 gradient \u0001 on \u0001 a \u0001 mini-batch \u0001 instead \u0001 of \u0001 the \u0001 full \u0001 dataset\nFaster \u0001 updates \u0001 per \u0001 step\nGradient \u0001 noise \u0001 can \u0001 help \u0001 escape \u0001 shallow \u0001 local \u0001 minima\n4",
+          "visualText": ""
+        },
+        {
+          "pageNo": 5,
+          "text": "Learning \u0001 Rate \u0001 Scheduling\nStep \u0001 decay : \u0001 halve \u0001 the \u0001 learning \u0001 rate \u0001 every \u0001 few \u0001 epochs\nCosine \u0001 annealing : \u0001 decrease \u0001 along \u0001 a \u0001 cosine \u0001 curve\nWarmup : \u0001 start \u0001 small \u0001 and \u0001 increase \u0001 the \u0001 learning \u0001 rate \u0001 during \u0001 the \u0001 first \u0001 5 \u0001 epochs\nNext: \u0001 Momentum, \u0001 Adam \u0001 optimizer\n5",
+          "visualText": ""
         }
       ]
     }
@@ -122,9 +147,9 @@
     {
       "sourceIndex": 0,
       "segmentIdx": 0,
-      "before": "그레디언트 디센트",
-      "after": "gradient descent",
-      "reason": "한글 음차 표기를 슬라이드의 영어 기술 용어로 바로잡음",
+      "before": "그레디언트디언트 디센트",
+      "after": "Gradient Descent",
+      "reason": "슬라이드에 영어로 표기된 기술 용어가 한글 발음으로 인식되었으므로 원어로 수정함",
       "kind": "term",
       "status": "accepted"
     },
@@ -133,8 +158,17 @@
       "segmentIdx": 1,
       "before": "로스 펑션",
       "after": "loss function",
-      "reason": "한글 음차 표기를 슬라이드의 영어 기술 용어로 바로잡음",
+      "reason": "슬라이드에 loss function으로 표기된 기술 용어가 한글 발음으로 인식되었으므로 원어로 수정함",
       "kind": "term",
+      "status": "accepted"
+    },
+    {
+      "sourceIndex": 0,
+      "segmentIdx": 2,
+      "before": "값이 값이",
+      "after": "값이",
+      "reason": "같은 단어가 반복되어 인식되었으므로 중복을 제거함",
+      "kind": "duplicate",
       "status": "accepted"
     },
     {
@@ -142,17 +176,8 @@
       "segmentIdx": 2,
       "before": "러닝 레이트",
       "after": "learning rate",
-      "reason": "한글 음차 표기를 슬라이드의 영어 기술 용어로 바로잡음",
+      "reason": "슬라이드에 learning rate로 표기된 기술 용어가 한글 발음으로 인식되었으므로 원어로 수정함",
       "kind": "term",
-      "status": "accepted"
-    },
-    {
-      "sourceIndex": 0,
-      "segmentIdx": 2,
-      "before": "우리말로 우리말로",
-      "after": "우리말로",
-      "reason": "우연히 반복된 단어를 하나로 바로잡음",
-      "kind": "duplicate",
       "status": "accepted"
     },
     {
@@ -160,115 +185,115 @@
       "segmentIdx": 3,
       "before": "러닝 레이트",
       "after": "learning rate",
-      "reason": "한글 음차 표기를 슬라이드의 영어 기술 용어로 바로잡음",
+      "reason": "슬라이드에 learning rate로 표기된 기술 용어가 한글 발음으로 인식되었으므로 원어로 수정함",
       "kind": "term",
       "status": "accepted"
     },
     {
       "sourceIndex": 0,
       "segmentIdx": 4,
-      "before": "에포",
-      "after": "에포크",
-      "reason": "잘못 인식된 단어를 문맥상 명백한 의도 단어인 에포크로 바로잡음",
-      "kind": "typo",
-      "status": "accepted"
-    },
-    {
-      "sourceIndex": 0,
-      "segmentIdx": 5,
-      "before": "미니 배치",
-      "after": "mini-batch",
-      "reason": "한글 음차 표기를 슬라이드의 영어 기술 용어로 바로잡음",
+      "before": "에폭",
+      "after": "epochs",
+      "reason": "슬라이드에 epochs로 표기된 기술 용어가 한글 발음으로 인식되었으므로 원어로 수정함",
       "kind": "term",
       "status": "accepted"
     },
     {
       "sourceIndex": 0,
-      "segmentIdx": 5,
+      "segmentIdx": 7,
+      "before": "미니 배치",
+      "after": "mini-batch",
+      "reason": "슬라이드에 mini-batch로 표기된 기술 용어가 한글 발음으로 인식되었으므로 원어로 수정함",
+      "kind": "term",
+      "status": "accepted"
+    },
+    {
+      "sourceIndex": 0,
+      "segmentIdx": 7,
       "before": "스토캐스틱 그레이디언트 디센트",
-      "after": "stochastic gradient descent",
-      "reason": "한글 음차 표기를 슬라이드의 영어 기술 용어로 바로잡음",
+      "after": "Stochastic Gradient Descent",
+      "reason": "슬라이드에 Stochastic Gradient Descent로 표기된 기술 용어가 한글 발음으로 인식되었으므로 원어로 수정함",
       "kind": "term",
       "status": "accepted"
     },
     {
       "sourceIndex": 0,
-      "segmentIdx": 6,
+      "segmentIdx": 8,
       "before": "미니 배치",
       "after": "mini-batch",
-      "reason": "한글 음차 표기를 슬라이드의 영어 기술 용어로 바로잡음",
+      "reason": "슬라이드에 mini-batch로 표기된 기술 용어가 한글 발음으로 인식되었으므로 원어로 수정함",
       "kind": "term",
       "status": "accepted"
     },
     {
       "sourceIndex": 0,
-      "segmentIdx": 7,
-      "before": "실무에서는실무에서는",
-      "after": "실무에서는",
-      "reason": "우연히 반복된 단어를 하나로 바로잡음",
+      "segmentIdx": 8,
+      "before": "약간의 약간의",
+      "after": "약간의",
+      "reason": "같은 단어가 반복되어 인식되었으므로 중복을 제거함",
       "kind": "duplicate",
       "status": "accepted"
     },
     {
       "sourceIndex": 0,
-      "segmentIdx": 7,
-      "before": "러닝 러닝 레이트",
+      "segmentIdx": 9,
+      "before": "러닝 레이트",
       "after": "learning rate",
-      "reason": "중복된 음절을 정리하고 한글화된 영어 기술 용어를 슬라이드 표기대로 영어로 바로잡음",
-      "kind": "term",
-      "status": "accepted"
-    },
-    {
-      "sourceIndex": 0,
-      "segmentIdx": 7,
-      "before": "러닝 레이트 스케줄링",
-      "after": "learning rate scheduling",
-      "reason": "한글 음차 표기를 슬라이드의 영어 기술 용어로 바로잡음",
-      "kind": "term",
-      "status": "accepted"
-    },
-    {
-      "sourceIndex": 0,
-      "segmentIdx": 8,
-      "before": "대표적인대표적인",
-      "after": "대표적인",
-      "reason": "우연히 반복된 단어를 하나로 바로잡음",
-      "kind": "duplicate",
-      "status": "accepted"
-    },
-    {
-      "sourceIndex": 0,
-      "segmentIdx": 8,
-      "before": "스텝 디케이",
-      "after": "step decay",
-      "reason": "한글 음차 표기를 슬라이드의 영어 기술 용어로 바로잡음",
-      "kind": "term",
-      "status": "accepted"
-    },
-    {
-      "sourceIndex": 0,
-      "segmentIdx": 8,
-      "before": "코사인 어닐링",
-      "after": "cosine annealing",
-      "reason": "한글 음차 표기를 슬라이드의 영어 기술 용어로 바로잡음",
+      "reason": "슬라이드에 learning rate로 표기된 기술 용어가 한글 발음으로 인식되었으므로 원어로 수정함",
       "kind": "term",
       "status": "accepted"
     },
     {
       "sourceIndex": 0,
       "segmentIdx": 9,
+      "before": "러닝 레이트 스케줄링",
+      "after": "Learning Rate Scheduling",
+      "reason": "슬라이드에 Learning Rate Scheduling으로 표기된 기술 용어가 한글 발음으로 인식되었으므로 원어로 수정함",
+      "kind": "term",
+      "status": "accepted"
+    },
+    {
+      "sourceIndex": 0,
+      "segmentIdx": 10,
+      "before": "에폭",
+      "after": "epochs",
+      "reason": "슬라이드에 epochs로 표기된 기술 용어가 한글 발음으로 인식되었으므로 원어로 수정함",
+      "kind": "term",
+      "status": "accepted"
+    },
+    {
+      "sourceIndex": 0,
+      "segmentIdx": 10,
+      "before": "스텝 디케이",
+      "after": "Step decay",
+      "reason": "슬라이드에 Step decay로 표기된 기술 용어가 한글 발음으로 인식되었으므로 원어로 수정함",
+      "kind": "term",
+      "status": "accepted"
+    },
+    {
+      "sourceIndex": 0,
+      "segmentIdx": 10,
+      "before": "코사인 어닐링",
+      "after": "Cosine annealing",
+      "reason": "슬라이드에 Cosine annealing으로 표기된 기술 용어가 한글 발음으로 인식되었으므로 원어로 수정함",
+      "kind": "term",
+      "status": "accepted"
+    },
+    {
+      "sourceIndex": 0,
+      "segmentIdx": 11,
       "before": "모멘텀",
       "after": "Momentum",
-      "reason": "한글 음차 표기를 슬라이드의 영어 기술 용어로 바로잡음",
+      "reason": "슬라이드에 Momentum으로 표기된 기술 용어가 한글 발음으로 인식되었으므로 원어로 수정함",
       "kind": "term",
       "status": "accepted"
     },
     {
       "sourceIndex": 0,
-      "segmentIdx": 9,
+      "segmentIdx": 11,
       "before": "아담 옵티마이저",
       "after": "Adam optimizer",
-      "reason": "한글 음차 표기를 슬라이드의 영어 기술 용어로 바로잡음",
+      "reason": "슬라이드에 Adam optimizer로 표기된 기술 용어가 한글 발음으로 인식되었으므로 원어로 수정함",
       "kind": "term",
       "status": "accepted"
     }
@@ -282,9 +307,9 @@
       "claims": [
         {
           "idx": 0,
-          "text": "이번 강의의 주제는 경사 하강법이다.",
+          "text": "이번 시간에는 경사 하강법을 다룬다.",
           "verdict": "supported",
-          "reason": "자막에서 경사 하강법을 다루겠다고 명시하고 슬라이드 제목도 동일하므로 주장이 완전히 지지된다.",
+          "reason": "전사와 슬라이드 제목이 이번 시간에 경사 하강법을 다룬다고 명시하므로 뒷받침된다.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -302,7 +327,7 @@
           "idx": 1,
           "text": "모델은 손실 함수의 값을 줄이는 방향으로 가중치를 조금씩 움직인다.",
           "verdict": "supported",
-          "reason": "자막과 슬라이드가 손실 함수 값을 낮추는 방향으로 가중치를 업데이트한다고 그대로 설명하므로 지지된다.",
+          "reason": "전사가 손실 함수 값을 줄이는 방향으로 가중치를 조금씩 움직인다고 명시하고 슬라이드도 동일 내용을 기재하므로 뒷받침된다.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -320,7 +345,7 @@
           "idx": 2,
           "text": "한 번에 얼마나 움직일지를 정하는 값이 학습률이다.",
           "verdict": "supported",
-          "reason": "자막과 슬라이드가 한 번의 이동량인 step size가 학습률이라고 정의하므로 지지된다.",
+          "reason": "전사가 한 번에 움직이는 양을 정하는 값이 학습률이라고 명시하고 슬라이드도 학습률을 각 업데이트의 단계 크기로 정의하므로 뒷받침된다.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -336,9 +361,9 @@
         },
         {
           "idx": 3,
-          "text": "학습률이 너무 크면 최솟값을 지나쳐 손실이 발산할 수 있다.",
+          "text": "학습률이 너무 크면 최솟값을 지나쳐 손실이 오히려 발산할 수 있다.",
           "verdict": "supported",
-          "reason": "자막과 슬라이드가 학습률이 크면 최솟값을 지나쳐 손실이 발산할 수 있다고 명시하므로 지지된다.",
+          "reason": "전사와 슬라이드가 학습률이 너무 크면 최솟값을 지나쳐 손실이 발산할 수 있다고 명시하므로 뒷받침된다.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -354,9 +379,9 @@
         },
         {
           "idx": 4,
-          "text": "학습률이 너무 작으면 학습이 매우 느려지고 정해진 에포크 안에 수렴하지 못할 수 있다.",
+          "text": "학습률이 너무 작으면 학습이 매우 느려지고 정해진 에폭 안에 수렴하지 못할 수 있다.",
           "verdict": "supported",
-          "reason": "자막과 슬라이드가 학습률이 작으면 느려지고 정해진 에포크 안에 수렴하지 못할 수 있다고 설명하므로 지지된다.",
+          "reason": "전사와 슬라이드가 학습률이 너무 작으면 학습이 느리고 정해진 에폭 안에 수렴하지 못할 수 있다고 명시하므로 뒷받침된다.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -372,9 +397,9 @@
         },
         {
           "idx": 5,
-          "text": "데이터 전체 대신 mini-batch로 기울기를 계산하는 방법을 stochastic gradient descent라고 부른다.",
+          "text": "슬라이드 그래프는 같은 모델을 세 가지 학습률로 학습시켰을 때의 손실 곡선이다.",
           "verdict": "supported",
-          "reason": "자막과 슬라이드가 전체 데이터 대신 mini-batch로 기울기를 계산하는 것을 SGD라고 정의하므로 지지된다.",
+          "reason": "전사가 슬라이드 그래프가 같은 모델을 세 가지 학습률로 학습시켰을 때의 손실 곡선이라고 명시하므로 뒷받침된다.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -390,9 +415,9 @@
         },
         {
           "idx": 6,
-          "text": "mini-batch를 쓰면 업데이트가 빠르고 기울기의 잡음이 얕은 지역 최솟값을 빠져나오는 데 도움이 되기도 한다.",
+          "text": "학습률 0.1 곡선은 급격히 하락해 에폭 5 이후 0 근처에서 수평을 유지하고, 0.001 곡선은 완만하게 하락해 에폭 20에서 약 1.4에 이르며, 1.0 곡선은 크게 지그재그로 진동하며 진폭이 커져 에폭 8 부근에 3을 초과한다.",
           "verdict": "supported",
-          "reason": "자막과 슬라이드가 빠른 업데이트와 잡음으로 얕은 지역 최솟값 탈출에 도움이 된다고 설명하므로 지지된다.",
+          "reason": "첨부된 슬라이드 p.3 이미지를 확인하면 세 곡선의 하락 형태와 에폭 5 이후 수평 구간, 에폭 20의 약 1.4, 에폭 8 부근의 3 초과 진동이 시각적으로 확인되므로 뒷받침된다.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -408,9 +433,9 @@
         },
         {
           "idx": 7,
-          "text": "실무에서는 학습 초반에 learning rate를 크게 두고 점점 줄이는 learning rate scheduling을 많이 쓴다.",
+          "text": "데이터 전체 대신 작은 묶음인 미니배치로 기울기를 계산하는 방법을 확률적 경사 하강법이라고 부른다.",
           "verdict": "supported",
-          "reason": "자막이 초반에 크게 두고 줄이는 scheduling을 실무에서 많이 쓴다고 그대로 진술하므로 지지된다.",
+          "reason": "전사가 미니배치로 기울기를 계산하는 방법을 Stochastic Gradient Descent라고 명시하고 슬라이드도 동일 정의를 기재하므로 뒷받침된다.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -426,9 +451,9 @@
         },
         {
           "idx": 8,
-          "text": "대표적인 방법으로 일정 에포크마다 절반으로 줄이는 step decay가 있다.",
+          "text": "미니배치를 쓰면 한 번에 업데이트가 빠르고 기울기에 생기는 약간의 잡음이 얕은 지역 최솟값을 빠져나오는 데 도움이 되기도 한다.",
           "verdict": "supported",
-          "reason": "자막과 슬라이드가 일정 에포크마다 절반으로 줄이는 방법을 step decay라고 명시하므로 지지된다.",
+          "reason": "전사와 슬라이드가 미니배치 사용 시 빠른 업데이트와 잡음으로 인한 얕은 지역 최솟값 탈출 도움을 명시하므로 뒷받침된다.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -444,40 +469,9 @@
         },
         {
           "idx": 9,
-          "text": "코사인 곡선을 따라 줄이는 cosine annealing이 있다.",
+          "text": "실무에서는 학습 초반에 학습률을 크게 두고 점점 줄이는 학습률 스케줄링을 많이 쓴다.",
           "verdict": "supported",
-          "reason": "자막과 슬라이드가 코사인 곡선을 따라 줄이는 방법을 cosine annealing이라고 명시하므로 지지된다.",
-          "citations": [
-            {
-              "sourceIndex": 0,
-              "segmentIdx": 8
-            }
-          ],
-          "pageCitations": [
-            {
-              "sourceIndex": 1,
-              "pageNo": 4
-            }
-          ]
-        },
-        {
-          "idx": 10,
-          "text": "warmup은 처음 5개 에포크 동안 작게 시작해 학습률을 높이는 방법이다.",
-          "verdict": "supported",
-          "reason": "슬라이드가 처음 5 에포크 동안 작게 시작해 학습률을 높이는 것을 warmup이라고 정의하므로 지지된다.",
-          "citations": [],
-          "pageCitations": [
-            {
-              "sourceIndex": 1,
-              "pageNo": 4
-            }
-          ]
-        },
-        {
-          "idx": 11,
-          "text": "다음 시간에는 Momentum과 Adam optimizer를 다룬다.",
-          "verdict": "supported",
-          "reason": "자막과 슬라이드가 다음 시간에 Momentum과 Adam optimizer를 다룬다고 명시하므로 지지된다.",
+          "reason": "전사가 실무에서 학습 초반에 크게 두고 점점 줄이는 학습률 스케줄링을 많이 쓴다고 명시하므로 뒷받침된다.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -487,7 +481,56 @@
           "pageCitations": [
             {
               "sourceIndex": 1,
-              "pageNo": 4
+              "pageNo": 5
+            }
+          ]
+        },
+        {
+          "idx": 10,
+          "text": "대표적인 방법으로 일정 에폭마다 절반으로 줄이는 스텝 디케이와 코사인 곡선을 따라 줄이는 코사인 어닐링이 있다.",
+          "verdict": "supported",
+          "reason": "전사와 슬라이드가 일정 에폭마다 절반으로 줄이는 스텝 디케이와 코사인 곡선을 따르는 코사인 어닐링을 명시하므로 뒷받침된다.",
+          "citations": [
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 10
+            }
+          ],
+          "pageCitations": [
+            {
+              "sourceIndex": 1,
+              "pageNo": 5
+            }
+          ]
+        },
+        {
+          "idx": 11,
+          "text": "웜업 방법에서는 처음 5개 에폭 동안 학습률을 작게 시작해 증가시킨다.",
+          "verdict": "supported",
+          "reason": "슬라이드 이미지가 웜업을 처음 5 에폭 동안 작게 시작해 학습률을 증가시키는 것으로 명시하므로 뒷받침된다.",
+          "citations": [],
+          "pageCitations": [
+            {
+              "sourceIndex": 1,
+              "pageNo": 5
+            }
+          ]
+        },
+        {
+          "idx": 12,
+          "text": "다음 시간에는 모멘텀과 아담 옵티마이저를 다룰 예정이다.",
+          "verdict": "supported",
+          "reason": "전사와 슬라이드가 다음 시간에 모멘텀과 아담 옵티마이저를 다룬다고 명시하므로 뒷받침된다.",
+          "citations": [
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 11
+            }
+          ],
+          "pageCitations": [
+            {
+              "sourceIndex": 1,
+              "pageNo": 5
             }
           ]
         }
@@ -503,7 +546,7 @@
           "idx": 0,
           "text": "학습률이 너무 크면 손실이 발산할 수 있다.",
           "verdict": "supported",
-          "reason": "자막과 슬라이드는 학습률이 너무 크면 최솟값을 지나쳐 손실이 발산할 수 있다고 명시하므로 주장이 완전히 뒷받침된다.",
+          "reason": "인용된 자막과 2번 슬라이드 이미지가 모두 학습률이 너무 크면 최솟값을 지나쳐 손실이 발산할 수 있다고 명시하므로 주장이 그대로 지지된다.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -519,9 +562,9 @@
         },
         {
           "idx": 1,
-          "text": "미니 배치를 쓰면 기울기 잡음 때문에 학습이 항상 더 정확해진다.",
+          "text": "그래프를 보면 학습률 0.001일 때 손실이 가장 빨리 줄어든다.",
           "verdict": "unsupported",
-          "reason": "근거는 잡음이 얕은 지역 최솟값 탈출에 도움이 될 수 있다고만 언급할 뿐 항상 더 정확해진다고 단정하지 않으므로 주장이 뒷받침되지 않는다.",
+          "reason": "3번 슬라이드 이미지에서 손실이 가장 빨리 줄어드는 것은 lr 0.1 곡선이고 lr 0.001 곡선은 가장 완만하므로 주장은 증거와 반대되어 지지되지 않는다.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -541,22 +584,58 @@
         },
         {
           "idx": 2,
-          "text": "드롭아웃은 추론할 때도 같은 비율로 뉴런을 끈다.",
-          "verdict": "unsupported",
-          "reason": "강의 자료에서 근거를 찾지 못했습니다",
-          "citations": [],
-          "pageCitations": []
+          "text": "그래프에서 학습률 1.0은 손실이 위아래로 흔들리다가 점점 커진다.",
+          "verdict": "supported",
+          "reason": "3번 슬라이드 이미지에서 lr 1.0 곡선이 위아래로 크게 진동하면서 정점과 저점이 점차 높아지는 모습이 확인되므로 주장이 증거에 의해 지지된다.",
+          "citations": [
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 5
+            },
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 6
+            }
+          ],
+          "pageCitations": [
+            {
+              "sourceIndex": 1,
+              "pageNo": 3
+            }
+          ]
         },
         {
           "idx": 3,
-          "text": "웜업은 처음 5에폭 동안 학습률을 점점 키운다.",
-          "verdict": "supported",
-          "reason": "슬라이드는 웜업을 처음 5에폭 동안 작은 값에서 시작해 학습률을 증가시키는 것으로 명시하므로 주장이 완전히 뒷받침된다.",
-          "citations": [],
+          "text": "미니 배치를 쓰면 기울기 잡음 때문에 학습이 항상 더 정확해진다.",
+          "verdict": "unsupported",
+          "reason": "인용 증거는 기울기 잡음이 얕은 지역 최솟값 탈출에 도움이 될 수 있다고만 말할 뿐 학습이 항상 더 정확해진다고 하지 않으므로 주장은 지지되지 않는다.",
+          "citations": [
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 7
+            },
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 8
+            }
+          ],
           "pageCitations": [
             {
               "sourceIndex": 1,
               "pageNo": 4
+            }
+          ]
+        },
+        {
+          "idx": 4,
+          "text": "웜업은 처음 5에폭 동안 학습률을 점점 키운다.",
+          "verdict": "supported",
+          "reason": "5번 슬라이드 이미지가 웜업을 처음 5에폭 동안 작게 시작해 학습률을 증가시키는 것으로 명시하므로 주장이 그대로 지지된다.",
+          "citations": [],
+          "pageCitations": [
+            {
+              "sourceIndex": 1,
+              "pageNo": 5
             }
           ]
         }
@@ -564,20 +643,68 @@
     },
     {
       "kind": "qa",
-      "question": "학습률을 너무 크게 하면 어떻게 돼?",
+      "question": "학습률 0.1과 0.001 중 어느 쪽이 손실이 더 빨리 줄어?",
       "language": "ko",
       "model": "muse-spark-1.3",
       "status": "done",
       "claims": [
         {
           "idx": 0,
-          "text": "학습률이 너무 크면 최솟값을 지나쳐 손실이 오히려 발산할 수 있다.",
+          "text": "학습률 0.1이 0.001보다 손실이 더 빨리 줄어든다.",
           "verdict": "supported",
-          "reason": "인용된 트랜스크립트와 슬라이드가 모두 학습률이 너무 크면 최솟값을 지나쳐 손실이 발산할 수 있다고 명시하므로 주장이 완전히 뒷받침된다.",
+          "reason": "슬라이드 p.3 이미지에서 lr=0.1 검정 실선이 lr=0.001 파랑 점선보다 초반에 훨씬 가파르게 하락하는 것이 직접 확인되므로 주장이 뒷받침된다.",
           "citations": [
             {
               "sourceIndex": 0,
-              "segmentIdx": 3
+              "segmentIdx": 5
+            },
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 6
+            }
+          ],
+          "pageCitations": [
+            {
+              "sourceIndex": 1,
+              "pageNo": 3
+            }
+          ]
+        },
+        {
+          "idx": 1,
+          "text": "0.1 곡선은 초반에 급격히 하락하여 5 에폭 이후 0 근처에서 유지된다.",
+          "verdict": "supported",
+          "reason": "이미지에서 lr=0.1 곡선이 초반에 급격히 떨어진 뒤 5 에폭 부근부터 0에 가까운 낮은 값에서 거의 수평을 유지하므로 주장이 뒷받침된다.",
+          "citations": [],
+          "pageCitations": [
+            {
+              "sourceIndex": 1,
+              "pageNo": 3
+            }
+          ]
+        },
+        {
+          "idx": 2,
+          "text": "0.001 곡선은 완만하게 하락하여 20 에폭에서도 약 1.4 수준에 머문다.",
+          "verdict": "supported",
+          "reason": "이미지에서 lr=0.001 파랑 점선이 완만하게 감소하여 20 에폭에서 약 1.4 수준에 머무는 것이 확인되므로 주장이 뒷받침된다.",
+          "citations": [],
+          "pageCitations": [
+            {
+              "sourceIndex": 1,
+              "pageNo": 3
+            }
+          ]
+        },
+        {
+          "idx": 3,
+          "text": "학습률이 너무 작으면 학습이 매우 느려진다.",
+          "verdict": "supported",
+          "reason": "트랜스크립트와 슬라이드 p.2 이미지가 모두 학습률이 너무 작으면 학습이 느려진다고 명시하므로 주장이 뒷받침된다.",
+          "citations": [
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 4
             }
           ],
           "pageCitations": [
@@ -598,41 +725,41 @@
       "claims": [
         {
           "idx": 0,
-          "text": "미니 배치를 쓰면 전체 데이터셋 대신 계산하므로 단계별 업데이트가 더 빠르다",
+          "text": "전체 데이터셋 대신 미니 배치로 기울기를 계산하면 단계별 업데이트가 더 빠르다.",
           "verdict": "supported",
-          "reason": "전사와 슬라이드가 전체 데이터셋 대신 미니배치로 기울기를 계산하며 단계별 업데이트가 더 빠르다고 명시하므로 해당 주장은 완전히 뒷받침된다",
+          "reason": "트랜스크립트와 슬라이드 p.4 이미지가 모두 미니배치로 기울기를 계산하면 단계별 업데이트가 더 빠르다고 직접 명시하므로 주장이 완전히 지지된다.",
           "citations": [
             {
               "sourceIndex": 0,
-              "segmentIdx": 5
+              "segmentIdx": 7
             },
             {
               "sourceIndex": 0,
-              "segmentIdx": 6
+              "segmentIdx": 8
             }
           ],
           "pageCitations": [
             {
               "sourceIndex": 1,
-              "pageNo": 3
+              "pageNo": 4
             }
           ]
         },
         {
           "idx": 1,
-          "text": "기울기에 약간의 잡음이 생겨 얕은 지역 최솟값을 빠져나오는 데 도움이 될 수 있다",
+          "text": "기울기에 생기는 약간의 잡음이 얕은 지역 최솟값을 빠져나오는 데 도움이 될 수 있다.",
           "verdict": "supported",
-          "reason": "전사와 슬라이드가 기울기 잡음이 얕은 지역 최솟값을 벗어나는 데 도움이 될 수 있다고 명시하므로 해당 주장은 완전히 뒷받침된다",
+          "reason": "트랜스크립트와 슬라이드 p.4 이미지가 모두 기울기 잡음이 얕은 지역 최솟값을 빠져나오는 데 도움이 될 수 있다고 직접 명시하므로 주장이 완전히 지지된다.",
           "citations": [
             {
               "sourceIndex": 0,
-              "segmentIdx": 6
+              "segmentIdx": 8
             }
           ],
           "pageCitations": [
             {
               "sourceIndex": 1,
-              "pageNo": 3
+              "pageNo": 4
             }
           ]
         }

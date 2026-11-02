@@ -31,6 +31,11 @@ export function mediaDirPath(dataDir: string = getDataDir()): string {
   return path.join(dataDir, 'media')
 }
 
+/** Rendered slide page images live here as `<pageId>.jpg`. */
+export function pageImagesDirPath(dataDir: string = getDataDir()): string {
+  return path.join(dataDir, 'page-images')
+}
+
 export function settingsFilePath(dataDir: string = getDataDir()): string {
   return path.join(dataDir, 'settings.json')
 }

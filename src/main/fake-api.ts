@@ -2,6 +2,7 @@ import { CHECK_LOCATE_SCHEMA_NAME } from './check-pipeline'
 import { CORRECTION_SCHEMA_NAME } from './correction'
 import { QA_SCHEMA_NAME } from './qa-pipeline'
 import { SUMMARY_SCHEMA_NAME, VERIFY_SCHEMA_NAME } from './grounding'
+import { SLIDE_VISUAL_SCHEMA_NAME } from './slide-vision'
 import type { ChatMessage, ChatOptions, MetaApi, TranscribeChunkOptions } from './meta-api'
 import type { TranscribeResult } from './transcribe'
 
@@ -18,7 +19,8 @@ import type { TranscribeResult } from './transcribe'
  *    claim supported except the 2nd (false, "[fake] not stated in the cited
  *    evidence"). Check-notes locate -> first segment for each sentence, none
  *    for sentences containing "dropout". Corrections -> one duplicate fix
- *    when a repeated word exists, else none.
+ *    when a repeated word exists, else none. Slide visual -> empty (the fake
+ *    slides have no figures), so fake-mode prompts stay text-only.
  */
 
 /** True when the dev-only fake API is enabled. Pure and unit-tested. */
@@ -60,8 +62,20 @@ export function parseFakePages(userContent: string): Array<{ k: number; text: st
   return out
 }
 
+/** Text of one message: plain content as is, or the text parts joined (images skipped). */
+function contentText(content: ChatMessage['content']): string {
+  if (typeof content === 'string') return content
+  return content
+    .filter((part) => part.type === 'text')
+    .map((part) => part.text)
+    .join('\n')
+}
+
 function userContentOf(messages: ChatMessage[]): string {
-  return messages.filter((m) => m.role === 'user').map((m) => m.content).join('\n')
+  return messages
+    .filter((m) => m.role === 'user')
+    .map((m) => contentText(m.content))
+    .join('\n')
 }
 
 function buildFakeSummaryPayload(userContent: string): unknown {
@@ -169,6 +183,7 @@ export function createFakeMetaApi(env: NodeJS.ProcessEnv = process.env): MetaApi
     if (name === VERIFY_SCHEMA_NAME) return buildFakeVerifyPayload(content)
     if (name === CHECK_LOCATE_SCHEMA_NAME) return buildFakeLocatePayload(content)
     if (name === CORRECTION_SCHEMA_NAME) return buildFakeCorrectionPayload(content)
+    if (name === SLIDE_VISUAL_SCHEMA_NAME) return { visual: '' }
     return '[fake] reply'
   }
 

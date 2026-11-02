@@ -331,7 +331,7 @@ describe('buildCorrectionMessages', () => {
   it('includes numbered lines and a truncated Slides glossary', () => {
     const messages = buildCorrectionMessages(['[1] (00:00:00–00:00:01) 히든 레이어'], ['a'.repeat(40_000)])
     expect(messages).toHaveLength(2)
-    const user = messages[1].content
+    const user = messages[1].content as string
     expect(user).toContain('[1]')
     expect(user).toContain('Slides:')
     const slidesPart = user.slice(user.indexOf('Slides:\n') + 'Slides:\n'.length)

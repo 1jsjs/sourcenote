@@ -10,8 +10,10 @@ files:
   # Main loads only the legacy pdf.js build; the renderer bundles its own copy.
   - "!node_modules/pdfjs-dist/{build,web,types,image_decoders}/**"
 # ffmpeg is spawned as a process, so its binary must live outside app.asar.
+# @napi-rs/canvas (used to render slide images) is a native .node module.
 asarUnpack:
   - node_modules/ffmpeg-static/**
+  - node_modules/@napi-rs/**
 extraResources:
   - from: samples/notes
     to: samples/notes

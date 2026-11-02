@@ -467,6 +467,7 @@ function registerIpc(getWindow: () => BrowserWindow | null): void {
         db,
         metaApi,
         language: currentLanguage(),
+        dataDir,
         onProgress: (event) => sendSummaryProgress(getWindow(), event),
       },
       noteId,
@@ -518,6 +519,7 @@ function registerIpc(getWindow: () => BrowserWindow | null): void {
         db,
         metaApi,
         language: currentLanguage(),
+        dataDir,
         onProgress: (event) => sendCheckProgress(getWindow(), event),
       },
       noteId,
@@ -531,7 +533,7 @@ function registerIpc(getWindow: () => BrowserWindow | null): void {
 
   ipcMain.handle('qa:ask', (_e, noteId: unknown, question: unknown) => {
     if (typeof noteId !== 'number') throw new Error('노트를 찾을 수 없습니다.')
-    return runQaPipeline({ db, metaApi, language: currentLanguage() }, noteId, question)
+    return runQaPipeline({ db, metaApi, language: currentLanguage(), dataDir }, noteId, question)
   })
 
   ipcMain.handle('qa:list', (_e, noteId: unknown) =>

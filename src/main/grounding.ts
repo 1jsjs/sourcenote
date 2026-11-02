@@ -1,5 +1,5 @@
 import type { AppLanguage } from '../shared/types'
-import type { ChatMessage } from './meta-api'
+import type { ChatContentPart, ChatMessage } from './meta-api'
 import { langMsg } from './lang'
 
 /**
@@ -91,12 +91,26 @@ export function idByNumberMap(numbered: NumberedSegment[]): Map<number, number> 
 /** Maximum slide page characters shown to the model per page. */
 export const MAX_PAGE_CHARS = 3000
 
+/**
+ * Page evidence shown to the model: the extracted text plus, when Muse Spark
+ * has read the rendered page image, a `[figure]` line describing the visual
+ * content (charts, diagrams, tables) the text cannot convey.
+ */
+export function pageEvidenceText(text: string, visualText: string | null | undefined): string {
+  if (visualText === null || visualText === undefined || visualText.trim().length === 0) {
+    return text
+  }
+  return text.trim().length > 0 ? `${text}\n[figure] ${visualText}` : `[figure] ${visualText}`
+}
+
 /** Minimal page shape needed for numbering (NotePage satisfies this). */
 export interface PageInput {
   id: number
   pageNo: number
   displayName: string
   text: string
+  /** Vision description of the page image; null/'' count as no visual evidence. */
+  visualText?: string | null
 }
 
 export interface NumberedPage {
@@ -119,18 +133,25 @@ export function formatPageLine(
   return `[P${k}] (${displayName} p.${pageNo}) ${clipped}`
 }
 
-/** Numbers non-empty pages 1..M in note order; empty pages are omitted. */
+/**
+ * Numbers pages 1..M in note order; pages with neither extracted text nor a
+ * visual description are omitted. `text`/`line` carry the combined evidence
+ * (extracted text plus the `[figure]` line when the page image was read).
+ */
 export function numberPages(pages: PageInput[]): NumberedPage[] {
-  const nonEmpty = pages.filter((p) => p.text.trim().length > 0)
+  const nonEmpty = pages.filter(
+    (p) => p.text.trim().length > 0 || (p.visualText ?? '').trim().length > 0,
+  )
   return nonEmpty.map((p, i) => {
     const k = i + 1
+    const text = pageEvidenceText(p.text, p.visualText)
     return {
       k,
       pageId: p.id,
       pageNo: p.pageNo,
       displayName: p.displayName,
-      text: p.text,
-      line: formatPageLine(k, p.displayName, p.pageNo, p.text),
+      text,
+      line: formatPageLine(k, p.displayName, p.pageNo, text),
     }
   })
 }
@@ -320,6 +341,8 @@ export const VERIFY_SYSTEM_PROMPT =
   'Transcripts are speech-recognition output: English technical terms may be spelled in Korean phonetics ' +
   '(e.g. 히든 레이어 = hidden layer, 백프로퍼게이션 = backpropagation). ' +
   'Treat these as the same term, not as a mismatch.\n' +
+  'When an image of a cited slide is attached, it is the authoritative evidence for that slide; ' +
+  'a [figure] description is only a helper and may be wrong, so check claims about figures against the image itself.\n' +
   'Reason in Korean, one sentence per claim.'
 
 /** Verification system prompt in the requested output language. */
@@ -331,6 +354,8 @@ export function verifySystemPrompt(language: AppLanguage): string {
       'Transcripts are speech-recognition output: technical terms may be misheard ' +
       '(e.g. Korean phonetic spellings of English terms like 히든 레이어 = hidden layer). ' +
       'Treat these as the same term, not as a mismatch.\n' +
+      'When an image of a cited slide is attached, it is the authoritative evidence for that slide; ' +
+      'a [figure] description is only a helper and may be wrong, so check claims about figures against the image itself.\n' +
       'Reason in English, one sentence per claim.'
     )
   }
@@ -380,8 +405,26 @@ export interface VerifyItem {
   citedTexts: string[]
 }
 
-/** Builds the verification chat messages for one batch of claims. */
-export function buildVerifyMessages(batch: VerifyItem[], language: AppLanguage = 'ko'): ChatMessage[] {
+/** Maximum slide page images attached to a single verification call. */
+export const MAX_VERIFY_IMAGES = 6
+
+/** One cited slide image attached to a verification call. */
+export interface VerifyImage {
+  pageNo: number
+  part: ChatContentPart
+}
+
+/**
+ * Builds the verification chat messages for one batch of claims. With slide
+ * images the user message becomes content parts: the unchanged text block
+ * first, then each image preceded by an `Image of slide p.N:` label. Without
+ * images the user content stays the plain text block.
+ */
+export function buildVerifyMessages(
+  batch: VerifyItem[],
+  language: AppLanguage = 'ko',
+  images: VerifyImage[] = [],
+): ChatMessage[] {
   const lines: string[] = []
   for (const item of batch) {
     lines.push(`Claim ${item.claimIdx}: ${item.text}`)
@@ -391,9 +434,20 @@ export function buildVerifyMessages(batch: VerifyItem[], language: AppLanguage =
     }
     lines.push('')
   }
+  const text = lines.join('\n').trimEnd()
+  const userContent: string | ChatContentPart[] =
+    images.length === 0
+      ? text
+      : [
+          { type: 'text', text },
+          ...images.flatMap((image): ChatContentPart[] => [
+            { type: 'text', text: `Image of slide p.${image.pageNo}:` },
+            image.part,
+          ]),
+        ]
   return [
     { role: 'system', content: verifySystemPrompt(language) },
-    { role: 'user', content: lines.join('\n').trimEnd() },
+    { role: 'user', content: userContent },
   ]
 }
 

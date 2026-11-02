@@ -13,6 +13,7 @@ import {
 } from './grounding'
 import { splitSentences } from '../shared/sentences'
 import type { ChatMessage, MetaApi } from './meta-api'
+import { ensurePageImages, readSlideVisuals } from './slide-vision'
 import { storeAndVerifyClaims } from './verify-claims'
 
 /**
@@ -202,6 +203,8 @@ export interface CheckPipelineDeps {
   metaApi: MetaApi
   model?: string
   language?: AppLanguage
+  /** Data dir holding page-images/; defaults to the app data dir. */
+  dataDir?: string
   onProgress?: (event: CheckProgressEvent) => void
 }
 
@@ -223,7 +226,7 @@ export async function runCheckPipeline(
 
   const sentences = splitUserSentences(notesText, language)
   const segments = listNoteSegments(db, noteId)
-  const pages = listNotePages(db, noteId)
+  let pages = listNotePages(db, noteId)
   if (segments.length === 0 && pages.length === 0) {
     throw new Error(langMsg(language, '검증할 강의 자료가 없습니다', 'No lecture evidence to check against'))
   }
@@ -232,6 +235,11 @@ export async function runCheckPipeline(
   try {
     // 1. Locate the most relevant evidence per user sentence.
     report('locating')
+    // Look at the slides first: render the page images locally, then read
+    // them once with vision so figure/table content joins the text evidence.
+    await ensurePageImages(db, noteId, deps.dataDir)
+    await readSlideVisuals({ db, metaApi, model, language, noteId })
+    pages = listNotePages(db, noteId)
     const numbered = numberSegments(segments)
     const numberedPages = numberPages(pages)
     const locateRaw = await metaApi.chat({

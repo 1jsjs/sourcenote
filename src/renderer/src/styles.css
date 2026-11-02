@@ -1641,6 +1641,30 @@ select {
   display: block;
 }
 
+/* Muse Spark's description of the page's figures, under the slide. */
+.slide-visual {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--sheet);
+}
+
+.slide-visual-label {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.slide-visual-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+  white-space: pre-wrap;
+}
+
 .source-error {
   margin: 8px 0 0;
   font-size: 13px;

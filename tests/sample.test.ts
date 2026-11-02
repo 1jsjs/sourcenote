@@ -310,4 +310,71 @@ describe('sample-note format', () => {
     expect(listSampleNotes(samplesDir)).toEqual([{ name: 'good', title: 'Good (sample)', language: 'en' }])
     expect(listSampleNotes(path.join(dir, 'missing'))).toEqual([])
   })
+
+  it('round-trips page visualText and imports old files without it as NULL', () => {
+    const noteId = seedRichNote()
+    // One page read by vision, one read-with-nothing-visual.
+    const pdf = listSources(db, noteId).find((s) => s.kind === 'pdf')
+    if (!pdf) throw new Error('seeded pdf source missing')
+    const pageRows = db
+      .prepare('SELECT id FROM pages WHERE source_id = ? ORDER BY page_no')
+      .all(pdf.id) as Array<{ id: number }>
+    db.prepare('UPDATE pages SET visual_text = ? WHERE id = ?').run('A rising loss curve', pageRows[0].id)
+    db.prepare('UPDATE pages SET visual_text = ? WHERE id = ?').run('', pageRows[1].id)
+
+    const sample = parseSampleNote(JSON.parse(JSON.stringify(serializeSampleNote(db, noteId))))
+    expect(sample.sources[1].pages).toEqual([
+      { pageNo: 1, text: 'Gradient Descent', visualText: 'A rising loss curve' },
+      { pageNo: 2, text: 'Learning Rate', visualText: '' },
+    ])
+
+    const sampleDir = path.join(dir, 'visual-sample')
+    fs.mkdirSync(sampleDir, { recursive: true })
+    fs.writeFileSync(path.join(sampleDir, 'note.json'), JSON.stringify(sample), 'utf8')
+    for (const source of listSources(db, noteId)) {
+      fs.copyFileSync(source.original_path, path.join(sampleDir, path.basename(source.original_path)))
+    }
+    const importDb = openDb(path.join(dir, 'visual-imported.sqlite'))
+    try {
+      const note = importSampleNote(importDb, sampleDir, path.join(dir, 'visual-data'))
+      const texts = (
+        importDb
+          .prepare(
+            'SELECT pg.visual_text AS vt FROM pages pg JOIN sources s ON s.id = pg.source_id ' +
+              'WHERE s.note_id = ? ORDER BY pg.page_no',
+          )
+          .all(note.id) as Array<{ vt: string | null }>
+      ).map((row) => row.vt)
+      expect(texts).toEqual(['A rising loss curve', ''])
+    } finally {
+      importDb.close()
+    }
+
+    // An old note.json without the field parses and imports as NULL.
+    const oldPage = { pageNo: 1, text: '옛날 슬라이드' }
+    const parsed = parseSampleNote({
+      format: 'sample-note/v1',
+      title: 'old',
+      language: 'ko',
+      sources: [{ kind: 'pdf', file: 'old.pdf', displayName: 'old.pdf', durationMs: null, segments: [], pages: [oldPage] }],
+      corrections: [],
+      summaries: [],
+    })
+    expect(parsed.sources[0].pages).toEqual([{ pageNo: 1, text: '옛날 슬라이드' }])
+    const oldDir = path.join(dir, 'old-sample')
+    fs.mkdirSync(oldDir, { recursive: true })
+    fs.writeFileSync(path.join(oldDir, 'old.pdf'), 'pdf')
+    fs.writeFileSync(path.join(oldDir, 'note.json'), JSON.stringify(parsed), 'utf8')
+    const oldDb = openDb(path.join(dir, 'old-imported.sqlite'))
+    try {
+      const note = importSampleNote(oldDb, oldDir, path.join(dir, 'old-data'))
+      const row = oldDb
+        .prepare('SELECT visual_text AS vt FROM pages')
+        .get() as { vt: string | null }
+      expect(note.title).toBe('old')
+      expect(row.vt).toBeNull()
+    } finally {
+      oldDb.close()
+    }
+  })
 })

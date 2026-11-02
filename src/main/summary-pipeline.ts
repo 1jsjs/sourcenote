@@ -16,6 +16,7 @@ import {
 } from './grounding'
 import { langMsg } from './lang'
 import type { MetaApi } from './meta-api'
+import { ensurePageImages, readSlideVisuals } from './slide-vision'
 import { storeAndVerifyClaims } from './verify-claims'
 
 /**
@@ -30,6 +31,8 @@ export interface SummaryPipelineDeps {
   metaApi: MetaApi
   model?: string
   language?: AppLanguage
+  /** Data dir holding page-images/; defaults to the app data dir. */
+  dataDir?: string
   onProgress?: (event: SummaryProgressEvent) => void
 }
 
@@ -46,7 +49,7 @@ export async function runSummaryPipeline(
   const language: AppLanguage = deps.language ?? 'ko'
 
   const segments = listNoteSegments(db, noteId)
-  const pages = listNotePages(db, noteId)
+  let pages = listNotePages(db, noteId)
   if (segments.length === 0 && pages.length === 0) {
     throw new Error(langMsg(language, '요약할 자료가 없습니다', 'No evidence to summarize'))
   }
@@ -59,6 +62,11 @@ export async function runSummaryPipeline(
   try {
     // 1. Summarize with citations.
     report('summarizing')
+    // Look at the slides first: render the page images locally, then read
+    // them once with vision so figure/table content joins the text evidence.
+    await ensurePageImages(db, noteId, deps.dataDir)
+    await readSlideVisuals({ db, metaApi, model, language, noteId })
+    pages = listNotePages(db, noteId)
     const numbered = numberSegments(segments)
     const numberedPages = numberPages(pages)
     const byNumber = idByNumberMap(numbered)

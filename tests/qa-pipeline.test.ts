@@ -83,7 +83,7 @@ describe('buildQaMessages', () => {
     const [system, user] = buildQaMessages('학습률이 뭐야?', numbered, [], 'ko')
     expect(system.content).toContain('ONLY')
     expect(system.content).toContain('empty claims list')
-    expect(user.content.startsWith('Question: 학습률이 뭐야?\nTranscript:\n[1]')).toBe(true)
+    expect((user.content as string).startsWith('Question: 학습률이 뭐야?\nTranscript:\n[1]')).toBe(true)
   })
 })
 

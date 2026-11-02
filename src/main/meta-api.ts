@@ -7,6 +7,7 @@ import {
   chatCostUsd,
   estimateChatCostUsd,
   estimateTranscribeCostUsd,
+  IMAGE_ESTIMATE_CHARS,
   TRANSCRIBE_MODEL,
   transcribeCostUsd,
   type LedgerStore,
@@ -76,9 +77,28 @@ export interface TranscribeChunkOptions {
   fileName?: string
 }
 
+/**
+ * One part of a multimodal chat message (OpenAI-style content parts).
+ * Images are sent as base64 data URLs.
+ */
+export type ChatContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } }
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant'
-  content: string
+  /** Plain text, or content parts when the message carries images. */
+  content: string | ChatContentPart[]
+}
+
+/** Pre-call estimate size of one message: text length plus a fixed per-image estimate. */
+export function messageContentChars(content: string | ChatContentPart[]): number {
+  if (typeof content === 'string') return content.length
+  let sum = 0
+  for (const part of content) {
+    sum += part.type === 'text' ? part.text.length : IMAGE_ESTIMATE_CHARS
+  }
+  return sum
 }
 
 export interface ChatOptions {
@@ -214,7 +234,7 @@ export function createMetaApi(deps: MetaApiDeps): MetaApi {
     const language = lang()
     const model = opts.model ?? CHAT_MODEL
     // 1. Budget gate: conservative estimate BEFORE any network traffic.
-    const promptChars = opts.messages.reduce((sum, m) => sum + m.content.length, 0)
+    const promptChars = opts.messages.reduce((sum, m) => sum + messageContentChars(m.content), 0)
     const estimate = estimateChatCostUsd(model, promptChars)
     reserve(estimate)
 

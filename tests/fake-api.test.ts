@@ -37,6 +37,7 @@ import {
   VERIFY_SCHEMA_NAME,
   type VerifyItem,
 } from '../src/main/grounding'
+import { SLIDE_VISUAL_SCHEMA, SLIDE_VISUAL_SCHEMA_NAME } from '../src/main/slide-vision'
 import { turnsToSegments } from '../src/main/transcribe'
 
 const NO_WAIT = { SOURCENOTE_FAKE_DELAY_MS: '0' } as NodeJS.ProcessEnv
@@ -180,5 +181,39 @@ describe('fake chat against real validators', () => {
     const content = '[1] (00:00:00–00:00:12) 첫 구간\n[P1] (slides.pdf p.1) 첫 슬라이드'
     expect(parseFakeSegments(content)).toHaveLength(1)
     expect(parseFakePages(content)).toHaveLength(1)
+  })
+
+  it('slide_visual returns an empty description (fake slides have no figures)', async () => {
+    const api = createFakeMetaApi(NO_WAIT)
+    const raw = await api.chat({
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Extracted slide text:\n본문' },
+            { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,AAAA' } },
+          ],
+        },
+      ],
+      responseFormat: { name: SLIDE_VISUAL_SCHEMA_NAME, schema: SLIDE_VISUAL_SCHEMA },
+    })
+    expect(raw).toEqual({ visual: '' })
+  })
+
+  it('multipart verify messages still feed the fake verify payload', async () => {
+    const items: VerifyItem[] = [
+      { claimIdx: 0, text: '주장 0', citedTexts: ['[slide p.1] 본문'] },
+    ]
+    const api = createFakeMetaApi(NO_WAIT)
+    const raw = await api.chat({
+      messages: buildVerifyMessages(items, 'ko', [
+        { pageNo: 1, part: { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,AAAA' } } },
+      ]),
+      responseFormat: { name: VERIFY_SCHEMA_NAME, schema: VERIFY_SCHEMA },
+    })
+    const resolved = applyVerifyResults([0], validateVerifyPayload(raw), 'ko')
+    expect(resolved).toEqual([
+      { claimIdx: 0, supported: true, reason: '[fake] supported by the cited evidence' },
+    ])
   })
 })

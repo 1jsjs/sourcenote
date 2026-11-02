@@ -1,7 +1,8 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { fileURLToPath } from 'node:url'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DatabaseSync } from 'node:sqlite'
 import {
   createNote,
@@ -9,10 +10,13 @@ import {
   getLatestSummary,
   insertPages,
   insertSegments,
+  listNotePageImages,
   openDb,
   updateSourceStatus,
 } from '../src/main/db'
+import { SUMMARY_SCHEMA_NAME } from '../src/main/grounding'
 import type { ChatOptions, MetaApi } from '../src/main/meta-api'
+import { SLIDE_VISUAL_SCHEMA_NAME } from '../src/main/slide-vision'
 import { runSummaryPipeline } from '../src/main/summary-pipeline'
 
 /** Seeds a note with one done audio source (2 segments) and one done pdf (2 pages). */
@@ -142,5 +146,72 @@ describe('runSummaryPipeline with slide pages', () => {
     expect(summary.claims[0].verdict).toBe('supported')
     expect(summary.claims[0].pageCitations[0].text).toBe('유일한 근거')
     expect(getLatestSummary(db, note.id)?.claims[0].pageCitations).toHaveLength(1)
+  })
+
+  it('renders and reads real slide images, then verifies against the image itself', async () => {
+    const demoPdf = fileURLToPath(new URL('../samples/demo-slides.pdf', import.meta.url))
+    const note = createNote(db, '실제 PDF 노트')
+    const pdf = createSource(db, {
+      noteId: note.id,
+      kind: 'pdf',
+      originalPath: demoPdf,
+      displayName: 'demo-slides.pdf',
+    })
+    insertPages(
+      db,
+      pdf.id,
+      Array.from({ length: 4 }, (_, i) => ({ pageNo: i + 1, text: `슬라이드 본문 ${i + 1}` })),
+    )
+    updateSourceStatus(db, pdf.id, 'done')
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const chatCalls: ChatOptions[] = []
+    const api: MetaApi = {
+      transcribeChunk: async () => {
+        throw new Error('사용되지 않음')
+      },
+      chat: async (opts: ChatOptions) => {
+        chatCalls.push(opts)
+        const name = opts.responseFormat?.name
+        if (name === SLIDE_VISUAL_SCHEMA_NAME) return { visual: '막대그래프가 있습니다' }
+        if (name === SUMMARY_SCHEMA_NAME) {
+          return { claims: [{ text: '그래프 주장', segment_ids: [], page_ids: [1] }] }
+        }
+        return { results: [{ claim_index: 0, supported: true, reason: '이미지에서 확인됨' }] }
+      },
+    }
+
+    const dataDir = path.join(dir, 'data')
+    const summary = await runSummaryPipeline({ db, metaApi: api, dataDir }, note.id)
+
+    // 4 vision reads + 1 summary + 1 verify.
+    expect(chatCalls).toHaveLength(6)
+    // The vision calls carry the rendered page image as a content part.
+    const visionUser = chatCalls[0].messages[1].content
+    if (!Array.isArray(visionUser)) throw new Error('vision call must be multipart')
+    expect(visionUser[0]).toEqual({ type: 'text', text: 'Extracted slide text:\n슬라이드 본문 1' })
+    expect(visionUser[1].type).toBe('image_url')
+
+    // The images landed on disk and the descriptions in the DB.
+    const pages = listNotePageImages(db, note.id)
+    expect(pages.every((p) => p.visualText === '막대그래프가 있습니다')).toBe(true)
+    for (const p of pages) {
+      expect(p.imagePath).not.toBeNull()
+      expect(fs.existsSync(p.imagePath as string)).toBe(true)
+    }
+
+    // The summary prompt saw the [figure] lines.
+    const summaryUser = chatCalls[4].messages[1].content
+    expect(summaryUser).toContain('[P1] (demo-slides.pdf p.1) 슬라이드 본문 1\n[figure] 막대그래프가 있습니다')
+
+    // The verify call attaches the cited page image after the text block.
+    const verifyUser = chatCalls[5].messages[1].content
+    if (!Array.isArray(verifyUser)) throw new Error('verify call must be multipart')
+    expect(verifyUser[0].type).toBe('text')
+    expect(verifyUser[1]).toEqual({ type: 'text', text: 'Image of slide p.1:' })
+    expect(verifyUser[2].type).toBe('image_url')
+    expect(chatCalls[5].messages[0].content).toContain('authoritative evidence')
+
+    expect(summary.claims[0].verdict).toBe('supported')
   })
 })

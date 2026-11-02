@@ -7,68 +7,108 @@
       "kind": "audio",
       "file": "demo-lecture-en.m4a",
       "displayName": "demo-lecture-en.m4a",
-      "durationMs": 83712,
+      "durationMs": 95552,
       "segments": [
         {
           "idx": 0,
-          "startMs": 300,
-          "endMs": 16300,
-          "text": "Today we're going to talk about gradient descent. The model moves its weights a little at a time in the direction that lowers the loss function. How far it moves in one step is set by the learning rate.",
-          "originalText": null,
+          "startMs": 140,
+          "endMs": 10780,
+          "text": "Today we're going to talk about gradient descent. <|speaker_A|>  The model moves its weights a little at a time in the direction that lowers the loss function.",
+          "originalText": "Today we're going to talk about gradient descent. <|speaker_A|>  The model moves its weights a little at a time in the direction that lowers the lowers the loss function.",
           "chunkIndex": 0
         },
         {
           "idx": 1,
-          "startMs": 18860,
-          "endMs": 25100,
-          "text": "If the learning rate is too large, the update overshoots the minimum and the loss can actually diverge.",
+          "startMs": 12860,
+          "endMs": 16300,
+          "text": "How far it moves in one step is set by the learning rate.",
           "originalText": null,
           "chunkIndex": 0
         },
         {
           "idx": 2,
-          "startMs": 27420,
-          "endMs": 32940,
-          "text": "If it is too small, training becomes very slow and may not converge within the epochs you have.",
-          "originalText": null,
+          "startMs": 18860,
+          "endMs": 24860,
+          "text": "If the learning rate is too large, the update overshoots the minimum and the loss can actually diverge.",
+          "originalText": "If the learning rate rate is too large, the update overshoots the minimum and the loss can actually diverge.",
           "chunkIndex": 0
         },
         {
           "idx": 3,
-          "startMs": 35420,
-          "endMs": 44700,
-          "text": "Instead of using the whole data set at once, we can compute the gradient on a small batch of examples this is called stochastic gradient descent",
-          "originalText": null,
+          "startMs": 27500,
+          "endMs": 33260,
+          "text": "If it is too small, training becomes very slow and may not converge within the epochs you have.",
+          "originalText": "If it is too small, training becomes very slow and may not converge within the the epochs you have.",
           "chunkIndex": 0
         },
         {
           "idx": 4,
-          "startMs": 47180,
-          "endMs": 55580,
-          "text": "With mini batches each update is fast and the small amount of noise in the gradient can even help the model escape shallow local minima.",
+          "startMs": 35660,
+          "endMs": 41500,
+          "text": "The graph on this slide shows the training loss of the same model with three different learning rates.",
           "originalText": null,
           "chunkIndex": 0
         },
         {
           "idx": 5,
-          "startMs": 58060,
-          "endMs": 66060,
-          "text": "In practice people often start with a large learning rate and shrink it over time this is called learning rate scheduling",
-          "originalText": "In practice people often start with a large learning rate and shrink it over over time this is called learning rate scheduling",
+          "startMs": 41820,
+          "endMs": 45020,
+          "text": "Take a look at how the shape of each curve differs.",
+          "originalText": null,
           "chunkIndex": 0
         },
         {
           "idx": 6,
-          "startMs": 68620,
-          "endMs": 77340,
-          "text": "Two common schedules are step decay which halves the learning rate every few epochs and cosine annealing which lowers it along a cosine curve.",
-          "originalText": "Two common schedules are step decay which halves the learning rate every few epochs and cosine annealing which lowers lowers it along a cosine curve.",
+          "startMs": 47500,
+          "endMs": 53500,
+          "text": "Instead of using the whole data set at once we can compute the gradient on a small batch of examples.",
+          "originalText": null,
           "chunkIndex": 0
         },
         {
           "idx": 7,
-          "startMs": 79900,
-          "endMs": 82860,
+          "startMs": 53660,
+          "endMs": 56460,
+          "text": "This is called stochastic gradient descent.",
+          "originalText": null,
+          "chunkIndex": 0
+        },
+        {
+          "idx": 8,
+          "startMs": 58940,
+          "endMs": 67340,
+          "text": "With mini batches each update is fast and the small amount of noise in the gradient can even help the model escape shallow local minima.",
+          "originalText": null,
+          "chunkIndex": 0
+        },
+        {
+          "idx": 9,
+          "startMs": 70220,
+          "endMs": 75100,
+          "text": "In practice people often start with a large learning rate and shrink it over time.",
+          "originalText": null,
+          "chunkIndex": 0
+        },
+        {
+          "idx": 10,
+          "startMs": 75500,
+          "endMs": 77580,
+          "text": "this is called learning rate scheduling.",
+          "originalText": null,
+          "chunkIndex": 0
+        },
+        {
+          "idx": 11,
+          "startMs": 80300,
+          "endMs": 89100,
+          "text": "Two common schedules are step decay which halves the learning rate every few epochs and cosine annealing which lowers it along a cosine curve.",
+          "originalText": null,
+          "chunkIndex": 0
+        },
+        {
+          "idx": 12,
+          "startMs": 91980,
+          "endMs": 94620,
           "text": "Next time we'll cover momentum and the Adam optimizer.",
           "originalText": null,
           "chunkIndex": 0
@@ -85,19 +125,28 @@
       "pages": [
         {
           "pageNo": 1,
-          "text": "Gradient \u0001 Descent \u0001 & \u0001 Learning \u0001 Rate\nWeek \u0001 4\n1"
+          "text": "Gradient \u0001 Descent \u0001 & \u0001 Learning \u0001 Rate\nWeek \u0001 4\n1",
+          "visualText": ""
         },
         {
           "pageNo": 2,
-          "text": "Gradient \u0001 Descent\nUpdate \u0001 weights \u0001 in \u0001 the \u0001 direction \u0001 that \u0001 lowers \u0001 the \u0001 loss \u0001 function\nLearning \u0001 rate : \u0001 step \u0001 size \u0001 of \u0001 each \u0001 update\nToo \u0001 large \u0001 → \u0001 overshoots \u0001 the \u0001 minimum, \u0001 loss \u0001 may \u0001 diverge\nToo \u0001 small \u0001 → \u0001 slow \u0001 training, \u0001 may \u0001 not \u0001 converge \u0001 within \u0001 the \u0001 epochs\n2"
+          "text": "Gradient \u0001 Descent\nUpdate \u0001 weights \u0001 in \u0001 the \u0001 direction \u0001 that \u0001 lowers \u0001 the \u0001 loss \u0001 function\nLearning \u0001 rate : \u0001 step \u0001 size \u0001 of \u0001 each \u0001 update\nToo \u0001 large \u0001 → \u0001 overshoots \u0001 the \u0001 minimum, \u0001 loss \u0001 may \u0001 diverge\nToo \u0001 small \u0001 → \u0001 slow \u0001 training, \u0001 may \u0001 not \u0001 converge \u0001 within \u0001 the \u0001 epochs\n2",
+          "visualText": ""
         },
         {
           "pageNo": 3,
-          "text": "Stochastic \u0001 Gradient \u0001 Descent \u0001 (SGD)\nCompute \u0001 the \u0001 gradient \u0001 on \u0001 a \u0001 mini-batch \u0001 instead \u0001 of \u0001 the \u0001 full \u0001 dataset\nFaster \u0001 updates \u0001 per \u0001 step\nGradient \u0001 noise \u0001 can \u0001 help \u0001 escape \u0001 shallow \u0001 local \u0001 minima\n3"
+          "text": "Learning \u0001 Rate \u0001 Comparison\n0\n1\n2\n3\n0 5 10 15 20\nEpoch\nLoss\nlr \u0001 = \u0001 1.0\nlr \u0001 = \u0001 0.1\nlr \u0001 = \u0001 0.001\n3",
+          "visualText": "Line plot with Epoch 0 to 20 on x-axis and Loss 0 to 3 on y-axis. Black solid lr=0.1 drops steeply from ~2.2 to near 0.2 by epoch 7 then stays flat near 0.15 to epoch 20. Blue dotted lr=0.001 declines slowly and nearly linearly from ~2.3 at epoch 0 to ~1.4 at epoch 20. Red-brown dashed lr=1.0 oscillates with growing amplitude, dipping to ~1.6 and peaking higher each cycle, exceeding 3 after epoch 8 and exiting the top of the plot."
         },
         {
           "pageNo": 4,
-          "text": "Learning \u0001 Rate \u0001 Scheduling\nStep \u0001 decay : \u0001 halve \u0001 the \u0001 learning \u0001 rate \u0001 every \u0001 few \u0001 epochs\nCosine \u0001 annealing : \u0001 decrease \u0001 along \u0001 a \u0001 cosine \u0001 curve\nWarmup : \u0001 start \u0001 small \u0001 and \u0001 increase \u0001 the \u0001 learning \u0001 rate \u0001 during \u0001 the \u0001 first \u0001 5 \u0001 epochs\nNext: \u0001 Momentum, \u0001 Adam \u0001 optimizer\n4"
+          "text": "Stochastic \u0001 Gradient \u0001 Descent \u0001 (SGD)\nCompute \u0001 the \u0001 gradient \u0001 on \u0001 a \u0001 mini-batch \u0001 instead \u0001 of \u0001 the \u0001 full \u0001 dataset\nFaster \u0001 updates \u0001 per \u0001 step\nGradient \u0001 noise \u0001 can \u0001 help \u0001 escape \u0001 shallow \u0001 local \u0001 minima\n4",
+          "visualText": ""
+        },
+        {
+          "pageNo": 5,
+          "text": "Learning \u0001 Rate \u0001 Scheduling\nStep \u0001 decay : \u0001 halve \u0001 the \u0001 learning \u0001 rate \u0001 every \u0001 few \u0001 epochs\nCosine \u0001 annealing : \u0001 decrease \u0001 along \u0001 a \u0001 cosine \u0001 curve\nWarmup : \u0001 start \u0001 small \u0001 and \u0001 increase \u0001 the \u0001 learning \u0001 rate \u0001 during \u0001 the \u0001 first \u0001 5 \u0001 epochs\nNext: \u0001 Momentum, \u0001 Adam \u0001 optimizer\n5",
+          "visualText": ""
         }
       ]
     }
@@ -105,19 +154,28 @@
   "corrections": [
     {
       "sourceIndex": 0,
-      "segmentIdx": 5,
-      "before": "over over",
-      "after": "over",
-      "reason": "Accidental repetition of the word 'over'.",
+      "segmentIdx": 0,
+      "before": "lowers the lowers the",
+      "after": "lowers the",
+      "reason": "Accidental repetition of 'lowers the'.",
       "kind": "duplicate",
       "status": "accepted"
     },
     {
       "sourceIndex": 0,
-      "segmentIdx": 6,
-      "before": "lowers lowers",
-      "after": "lowers",
-      "reason": "Accidental repetition of the word 'lowers'.",
+      "segmentIdx": 2,
+      "before": "rate rate",
+      "after": "rate",
+      "reason": "Accidental repetition of 'rate'.",
+      "kind": "duplicate",
+      "status": "accepted"
+    },
+    {
+      "sourceIndex": 0,
+      "segmentIdx": 3,
+      "before": "the the",
+      "after": "the",
+      "reason": "Accidental repetition of 'the'.",
       "kind": "duplicate",
       "status": "accepted"
     }
@@ -131,9 +189,9 @@
       "claims": [
         {
           "idx": 0,
-          "text": "Gradient descent updates model weights incrementally in the direction that reduces the loss function.",
+          "text": "The lecture introduces gradient descent, in which the model moves its weights a little at a time in the direction that lowers the loss function.",
           "verdict": "supported",
-          "reason": "Both the transcript and slide state the model moves weights a little at a time in the direction that lowers the loss function.",
+          "reason": "The transcript states the topic is gradient descent and defines it as moving weights a little at a time to lower loss, which the slide repeats.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -141,6 +199,10 @@
             }
           ],
           "pageCitations": [
+            {
+              "sourceIndex": 1,
+              "pageNo": 1
+            },
             {
               "sourceIndex": 1,
               "pageNo": 2
@@ -149,27 +211,9 @@
         },
         {
           "idx": 1,
-          "text": "The learning rate sets how far the weights move in each update step.",
+          "text": "The learning rate sets how far the model moves in one update step.",
           "verdict": "supported",
-          "reason": "Both the transcript and slide state the learning rate sets how far the model moves in one step or the step size of each update.",
-          "citations": [
-            {
-              "sourceIndex": 0,
-              "segmentIdx": 0
-            }
-          ],
-          "pageCitations": [
-            {
-              "sourceIndex": 1,
-              "pageNo": 2
-            }
-          ]
-        },
-        {
-          "idx": 2,
-          "text": "A learning rate that is too large causes the update to overshoot the minimum and the loss may diverge.",
-          "verdict": "supported",
-          "reason": "Both the transcript and slide state too large a learning rate overshoots the minimum and the loss may or can diverge.",
+          "reason": "Both the transcript and slide p.2 explicitly define learning rate as the step size or how far the model moves in one update.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -184,10 +228,10 @@
           ]
         },
         {
-          "idx": 3,
-          "text": "A learning rate that is too small makes training very slow and it may not converge within the available epochs.",
+          "idx": 2,
+          "text": "A learning rate that is too large causes the update to overshoot the minimum and the loss may diverge.",
           "verdict": "supported",
-          "reason": "Both the transcript and slide state too small a learning rate makes training slow or very slow and may not converge within the epochs.",
+          "reason": "Both the transcript and slide p.2 state that too large overshoots the minimum and loss may diverge.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -202,14 +246,36 @@
           ]
         },
         {
-          "idx": 4,
-          "text": "Stochastic gradient descent computes the gradient on a small mini-batch of examples instead of the full dataset.",
+          "idx": 3,
+          "text": "A learning rate that is too small makes training very slow and it may not converge within the available epochs.",
           "verdict": "supported",
-          "reason": "The transcript defines computing the gradient on a small batch as stochastic gradient descent and the slide states computing the gradient on a mini-batch instead of the full dataset.",
+          "reason": "Both the transcript and slide p.2 state that too small causes slow training and may not converge within the epochs.",
           "citations": [
             {
               "sourceIndex": 0,
               "segmentIdx": 3
+            }
+          ],
+          "pageCitations": [
+            {
+              "sourceIndex": 1,
+              "pageNo": 2
+            }
+          ]
+        },
+        {
+          "idx": 4,
+          "text": "Training loss for the same model is compared across three learning rates, with each curve showing a different shape.",
+          "verdict": "supported",
+          "reason": "The transcripts state the graph shows training loss of the same model with three learning rates with differing curve shapes, which the slide image confirms.",
+          "citations": [
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 4
+            },
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 5
             }
           ],
           "pageCitations": [
@@ -221,15 +287,10 @@
         },
         {
           "idx": 5,
-          "text": "Updates with mini-batches are fast.",
+          "text": "With a moderate rate the loss drops steeply and then stays low, with a very small rate the loss declines slowly, and with a very large rate the loss oscillates with growing amplitude and diverges.",
           "verdict": "supported",
-          "reason": "The transcript states each mini-batch update is fast and the slide states faster updates per step.",
-          "citations": [
-            {
-              "sourceIndex": 0,
-              "segmentIdx": 4
-            }
-          ],
+          "reason": "The slide p.3 image shows lr=0.1 dropping steeply then staying low, lr=0.001 declining slowly, and lr=1.0 oscillating with growing amplitude off the chart.",
+          "citations": [],
           "pageCitations": [
             {
               "sourceIndex": 1,
@@ -239,31 +300,35 @@
         },
         {
           "idx": 6,
-          "text": "The small noise in mini-batch gradients can help the model escape shallow local minima.",
+          "text": "Instead of using the whole dataset at once, the gradient can be computed on a small batch of examples, which is called stochastic gradient descent.",
           "verdict": "supported",
-          "reason": "Both the transcript and slide state the small noise in the gradient can help escape shallow local minima.",
+          "reason": "The transcripts state computing the gradient on a small batch instead of the whole dataset is called stochastic gradient descent, matching slide p.4.",
           "citations": [
             {
               "sourceIndex": 0,
-              "segmentIdx": 4
+              "segmentIdx": 6
+            },
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 7
             }
           ],
           "pageCitations": [
             {
               "sourceIndex": 1,
-              "pageNo": 3
+              "pageNo": 4
             }
           ]
         },
         {
           "idx": 7,
-          "text": "Learning rate scheduling starts with a large learning rate and shrinks it over time.",
-          "verdict": "unsupported",
-          "reason": "The transcript only says people often start large and shrink it, and the cited slide lists warmup starting small, so the universal claim is an unsupported generalization.",
+          "text": "Mini-batch updates are fast, and the small amount of gradient noise can help the model escape shallow local minima.",
+          "verdict": "supported",
+          "reason": "Both the transcript and slide p.4 state mini-batch updates are faster and gradient noise can help escape shallow local minima.",
           "citations": [
             {
               "sourceIndex": 0,
-              "segmentIdx": 5
+              "segmentIdx": 8
             }
           ],
           "pageCitations": [
@@ -275,50 +340,54 @@
         },
         {
           "idx": 8,
-          "text": "Step decay halves the learning rate every few epochs.",
+          "text": "In practice, training often starts with a large learning rate that is reduced over time, a technique called learning rate scheduling.",
           "verdict": "supported",
-          "reason": "Both the transcript and slide state step decay halves the learning rate every few epochs.",
+          "reason": "The transcripts state practice often starts large and shrinks the rate over time and that this is called learning rate scheduling.",
           "citations": [
             {
               "sourceIndex": 0,
-              "segmentIdx": 6
+              "segmentIdx": 9
+            },
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 10
             }
           ],
           "pageCitations": [
             {
               "sourceIndex": 1,
-              "pageNo": 4
+              "pageNo": 5
             }
           ]
         },
         {
           "idx": 9,
-          "text": "Cosine annealing decreases the learning rate along a cosine curve.",
+          "text": "Two common schedules are step decay, which halves the learning rate every few epochs, and cosine annealing, which lowers it along a cosine curve.",
           "verdict": "supported",
-          "reason": "Both the transcript and slide state cosine annealing lowers or decreases along a cosine curve.",
+          "reason": "Both the transcript and slide p.5 define step decay as halving every few epochs and cosine annealing as decreasing along a cosine curve.",
           "citations": [
             {
               "sourceIndex": 0,
-              "segmentIdx": 6
+              "segmentIdx": 11
             }
           ],
           "pageCitations": [
             {
               "sourceIndex": 1,
-              "pageNo": 4
+              "pageNo": 5
             }
           ]
         },
         {
           "idx": 10,
-          "text": "Warmup starts small and increases the learning rate during the first 5 epochs.",
+          "text": "Another schedule shown is warmup, which starts small and increases the learning rate during the first 5 epochs.",
           "verdict": "supported",
-          "reason": "The cited slide explicitly states warmup starts small and increases the learning rate during the first 5 epochs.",
+          "reason": "Slide p.5 image explicitly lists warmup as starting small and increasing the learning rate during the first 5 epochs.",
           "citations": [],
           "pageCitations": [
             {
               "sourceIndex": 1,
-              "pageNo": 4
+              "pageNo": 5
             }
           ]
         },
@@ -326,17 +395,17 @@
           "idx": 11,
           "text": "The next lecture will cover momentum and the Adam optimizer.",
           "verdict": "supported",
-          "reason": "Both the transcript and slide state momentum and the Adam optimizer are next or to be covered next time.",
+          "reason": "Both the transcript and slide p.5 state next is momentum and Adam optimizer.",
           "citations": [
             {
               "sourceIndex": 0,
-              "segmentIdx": 7
+              "segmentIdx": 12
             }
           ],
           "pageCitations": [
             {
               "sourceIndex": 1,
-              "pageNo": 4
+              "pageNo": 5
             }
           ]
         }
@@ -352,11 +421,11 @@
           "idx": 0,
           "text": "If the learning rate is too large, the loss can diverge.",
           "verdict": "supported",
-          "reason": "Both the transcript and slide state that too large a learning rate overshoots the minimum and the loss can or may diverge.",
+          "reason": "Both the transcript and the slide p.2 image state that too large a learning rate overshoots the minimum and the loss may diverge.",
           "citations": [
             {
               "sourceIndex": 0,
-              "segmentIdx": 1
+              "segmentIdx": 2
             }
           ],
           "pageCitations": [
@@ -368,9 +437,97 @@
         },
         {
           "idx": 1,
+          "text": "In the graph, the loss falls fastest with a learning rate of 0.001.",
+          "verdict": "unsupported",
+          "reason": "The slide p.3 image shows lr=0.1 dropping steeply to near zero while lr=0.001 declines only slowly, contradicting the claim that 0.001 falls fastest.",
+          "citations": [
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 4
+            },
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 5
+            }
+          ],
+          "pageCitations": [
+            {
+              "sourceIndex": 1,
+              "pageNo": 3
+            }
+          ]
+        },
+        {
+          "idx": 2,
+          "text": "In the graph, the loss with a learning rate of 1.0 swings up and down and keeps growing.",
+          "verdict": "supported",
+          "reason": "The slide p.3 image shows the lr=1.0 curve oscillating up and down with peaks reaching higher values until it exits the top of the plot.",
+          "citations": [
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 4
+            },
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 5
+            }
+          ],
+          "pageCitations": [
+            {
+              "sourceIndex": 1,
+              "pageNo": 3
+            }
+          ]
+        },
+        {
+          "idx": 3,
           "text": "Mini-batch noise always makes training more accurate.",
           "verdict": "unsupported",
-          "reason": "The evidence only says noise can help escape shallow local minima, not that it always makes training more accurate.",
+          "reason": "The cited evidence only says gradient noise can help escape shallow local minima, not that it always makes training more accurate.",
+          "citations": [
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 6
+            },
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 8
+            }
+          ],
+          "pageCitations": [
+            {
+              "sourceIndex": 1,
+              "pageNo": 4
+            }
+          ]
+        },
+        {
+          "idx": 4,
+          "text": "Warmup increases the learning rate during the first 5 epochs.",
+          "verdict": "supported",
+          "reason": "The slide p.5 image explicitly defines Warmup as starting small and increasing the learning rate during the first 5 epochs.",
+          "citations": [],
+          "pageCitations": [
+            {
+              "sourceIndex": 1,
+              "pageNo": 5
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "qa",
+      "question": "Which learning rate makes the loss fall faster, 0.1 or 0.001?",
+      "language": "en",
+      "model": "muse-spark-1.3",
+      "status": "done",
+      "claims": [
+        {
+          "idx": 0,
+          "text": "A learning rate of 0.1 makes the loss fall faster than 0.001.",
+          "verdict": "supported",
+          "reason": "The slide image shows the lr=0.1 black curve falling steeply while the lr=0.001 blue dotted curve falls much more slowly, and the transcript confirms the graph compares training loss of the same model at different learning rates.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -385,50 +542,24 @@
           ]
         },
         {
-          "idx": 2,
-          "text": "Dropout turns off neurons at inference time too.",
-          "verdict": "unsupported",
-          "reason": "No supporting evidence found in the lecture materials",
-          "citations": [],
-          "pageCitations": []
-        },
-        {
-          "idx": 3,
-          "text": "Warmup increases the learning rate during the first 5 epochs.",
+          "idx": 1,
+          "text": "The 0.1 curve drops steeply to near zero within about seven epochs, while the 0.001 curve declines slowly and remains high through twenty epochs.",
           "verdict": "supported",
-          "reason": "The slide explicitly defines warmup as starting small and increasing the learning rate during the first 5 epochs.",
-          "citations": [],
-          "pageCitations": [
-            {
-              "sourceIndex": 1,
-              "pageNo": 4
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "kind": "qa",
-      "question": "What happens if the learning rate is too large?",
-      "language": "en",
-      "model": "muse-spark-1.3",
-      "status": "done",
-      "claims": [
-        {
-          "idx": 0,
-          "text": "If the learning rate is too large, the update overshoots the minimum and the loss may diverge.",
-          "verdict": "supported",
-          "reason": "Both cited sources state that too large a learning rate overshoots the minimum and may cause the loss to diverge.",
+          "reason": "The slide image shows the 0.1 curve reaching near zero by about epoch 7 while the 0.001 curve declines slowly to only about 1.4 by epoch 20, matching the claimed shapes.",
           "citations": [
             {
               "sourceIndex": 0,
-              "segmentIdx": 1
+              "segmentIdx": 4
+            },
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 5
             }
           ],
           "pageCitations": [
             {
               "sourceIndex": 1,
-              "pageNo": 2
+              "pageNo": 3
             }
           ]
         }
@@ -445,39 +576,39 @@
           "idx": 0,
           "text": "Mini-batches compute the gradient on a small batch instead of the full dataset, so each update is fast.",
           "verdict": "supported",
-          "reason": "Both the transcript segments and the slide state that the gradient is computed on a small batch instead of the full dataset and that each update is fast.",
+          "reason": "Both the transcript and slide image state the gradient is computed on a small/mini-batch instead of the full dataset and that each update is fast.",
           "citations": [
             {
               "sourceIndex": 0,
-              "segmentIdx": 3
+              "segmentIdx": 6
             },
             {
               "sourceIndex": 0,
-              "segmentIdx": 4
+              "segmentIdx": 8
             }
           ],
           "pageCitations": [
             {
               "sourceIndex": 1,
-              "pageNo": 3
+              "pageNo": 4
             }
           ]
         },
         {
           "idx": 1,
-          "text": "The small noise in the mini-batch gradient can help the model escape shallow local minima.",
+          "text": "The small amount of noise in the mini-batch gradient can help the model escape shallow local minima.",
           "verdict": "supported",
-          "reason": "Both the transcript segment and the slide explicitly state that small gradient noise can help escape shallow local minima.",
+          "reason": "The transcript explicitly says the small amount of noise in the gradient can help escape shallow local minima and the slide image states the same.",
           "citations": [
             {
               "sourceIndex": 0,
-              "segmentIdx": 4
+              "segmentIdx": 8
             }
           ],
           "pageCitations": [
             {
               "sourceIndex": 1,
-              "pageNo": 3
+              "pageNo": 4
             }
           ]
         }

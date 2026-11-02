@@ -32,6 +32,8 @@ export interface SampleSegment {
 export interface SamplePage {
   pageNo: number
   text: string
+  /** Vision description of the page image; absent/null means not read yet. */
+  visualText?: string | null
 }
 
 export interface SampleSource {
@@ -162,7 +164,12 @@ function parsePage(raw: unknown): SamplePage {
   if (typeof raw.pageNo !== 'number' || !Number.isInteger(raw.pageNo)) {
     throw invalid('page "pageNo" must be an integer')
   }
-  return { pageNo: raw.pageNo, text: asString(raw, 'text') }
+  const page: SamplePage = { pageNo: raw.pageNo, text: asString(raw, 'text') }
+  // Older sample files have no visualText; absent and null both mean "not read".
+  if (raw.visualText !== undefined && raw.visualText !== null) {
+    page.visualText = asString(raw, 'visualText')
+  }
+  return page
 }
 
 function parseSource(raw: unknown): SampleSource {
@@ -297,7 +304,13 @@ export function serializeSampleNote(db: DatabaseSync, noteId: number): SampleNot
         chunkIndex: seg.chunk_index,
       }
     })
-    const pages = listSourcePages(db, source.id).map((p) => ({ pageNo: p.pageNo, text: p.text }))
+    const pages = listSourcePages(db, source.id).map((p) => ({
+      pageNo: p.pageNo,
+      text: p.text,
+      // Page images are not bundled: only the vision text travels, and only
+      // when the page was read (null stays absent).
+      ...(p.visualText !== null ? { visualText: p.visualText } : {}),
+    }))
     return {
       kind: source.kind,
       file: path.basename(source.original_path),
@@ -415,7 +428,9 @@ export function importSampleNote(db: DatabaseSync, sampleDir: string, dataDir: s
       'INSERT INTO segments (source_id, idx, start_ms, end_ms, text, original_text, chunk_index) ' +
         'VALUES (?, ?, ?, ?, ?, ?, ?)',
     )
-    const pageStmt = db.prepare('INSERT INTO pages (source_id, page_no, text) VALUES (?, ?, ?)')
+    const pageStmt = db.prepare(
+      'INSERT INTO pages (source_id, page_no, text, visual_text) VALUES (?, ?, ?, ?)',
+    )
     sample.sources.forEach((source, sourceIndex) => {
       const sourceRes = sourceStmt.run(
         noteId,
@@ -440,7 +455,7 @@ export function importSampleNote(db: DatabaseSync, sampleDir: string, dataDir: s
         segmentIdByKey.set(`${sourceIndex}:${s.idx}`, Number(segRes.lastInsertRowid))
       }
       for (const p of source.pages) {
-        const pageRes = pageStmt.run(sourceId, p.pageNo, p.text)
+        const pageRes = pageStmt.run(sourceId, p.pageNo, p.text, p.visualText ?? null)
         pageIdByKey.set(`${sourceIndex}:${p.pageNo}`, Number(pageRes.lastInsertRowid))
       }
     })

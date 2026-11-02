@@ -7,12 +7,18 @@ import {
   createNote,
   createSource,
   createSummary,
+  deleteNote,
   getLatestSummary,
   insertClaimsWithCitations,
   insertPages,
   insertSegments,
+  listNotePageImages,
   listNotePages,
+  listSourcePages,
   openDb,
+  pageImagePathMap,
+  setPageImagePath,
+  setPageVisualText,
   setSummaryStatus,
   updateSourceStatus,
 } from '../src/main/db'
@@ -33,12 +39,12 @@ describe('db v3 (slide pages)', () => {
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
-  it('opens at user_version 7', () => {
+  it('opens at user_version 8', () => {
     const row = db.prepare('PRAGMA user_version').get() as { user_version: number }
-    expect(row.user_version).toBe(7)
+    expect(row.user_version).toBe(8)
   })
 
-  it('migrates a v2 database file to v7 without losing data', () => {
+  it('migrates a v2 database file to v8 without losing data', () => {
     const note = createNote(db, '기존 노트')
     const source = createSource(db, {
       noteId: note.id,
@@ -67,7 +73,7 @@ describe('db v3 (slide pages)', () => {
 
     db = openDb(dbFile)
     const row = db.prepare('PRAGMA user_version').get() as { user_version: number }
-    expect(row.user_version).toBe(7)
+    expect(row.user_version).toBe(8)
     // v2 data survived the migration.
     const latest = getLatestSummary(db, note.id)
     expect(latest?.claims).toHaveLength(1)
@@ -145,5 +151,96 @@ describe('db v3 (slide pages)', () => {
       sourceId: pdf.id,
       sourceDisplayName: 'slides.pdf',
     })
+  })
+})
+
+describe('db v8 (page images + vision text)', () => {
+  let dir: string
+  let dbFile: string
+  let db: DatabaseSync
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sourcenote-db8-'))
+    dbFile = path.join(dir, 'test.sqlite')
+    db = openDb(dbFile)
+  })
+
+  afterEach(() => {
+    db.close()
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  /** A note with one done pdf source and two pages; returns their ids. */
+  function seedPages(): { noteId: number; pageIds: number[] } {
+    const note = createNote(db, 'n')
+    const pdf = createSource(db, {
+      noteId: note.id,
+      kind: 'pdf',
+      originalPath: path.join(dir, 'slides.pdf'),
+      displayName: 'slides.pdf',
+    })
+    updateSourceStatus(db, pdf.id, 'done')
+    const pageIds = insertPages(db, pdf.id, [
+      { pageNo: 1, text: '첫 장' },
+      { pageNo: 2, text: '둘 장' },
+    ])
+    return { noteId: note.id, pageIds }
+  }
+
+  it('migration v8 adds image_path and visual_text columns, both NULL by default', () => {
+    const columns = db.prepare('PRAGMA table_info(pages)').all() as unknown as Array<{
+      name: string
+    }>
+    expect(columns.map((c) => c.name)).toEqual(
+      expect.arrayContaining(['image_path', 'visual_text']),
+    )
+    const { noteId, pageIds } = seedPages()
+    const pages = listNotePages(db, noteId)
+    expect(pages.map((p) => p.visualText)).toEqual([null, null])
+    expect(pageImagePathMap(db, pageIds)).toEqual(new Map())
+  })
+
+  it('image path and visual text round-trip through the page helpers', () => {
+    const { noteId, pageIds } = seedPages()
+    const imagePath = path.join(dir, 'page-images', `${pageIds[0]}.jpg`)
+    fs.mkdirSync(path.dirname(imagePath), { recursive: true })
+    fs.writeFileSync(imagePath, Buffer.from([0xff, 0xd8]))
+    setPageImagePath(db, pageIds[0], imagePath)
+    setPageVisualText(db, pageIds[0], '막대그래프 하나')
+
+    // The renderer-facing lists carry visualText but never image paths.
+    const pages = listNotePages(db, noteId)
+    expect(pages[0].visualText).toBe('막대그래프 하나')
+    expect(pages[1].visualText).toBeNull()
+    expect('imagePath' in pages[0]).toBe(false)
+    expect(listSourcePages(db, pages[0].sourceId)[0].visualText).toBe('막대그래프 하나')
+
+    // The main-only helper exposes paths for the vision step.
+    const images = listNotePageImages(db, noteId)
+    expect(images).toHaveLength(2)
+    expect(images[0]).toMatchObject({
+      pageId: pageIds[0],
+      pageNo: 1,
+      imagePath,
+      visualText: '막대그래프 하나',
+      originalPath: path.join(dir, 'slides.pdf'),
+    })
+    expect(images[1].imagePath).toBeNull()
+    expect(pageImagePathMap(db, pageIds)).toEqual(new Map([[pageIds[0], imagePath]]))
+  })
+
+  it('deleteNote removes the note page image files from disk', () => {
+    const { noteId, pageIds } = seedPages()
+    const other = createNote(db, 'other')
+    const imagePath = path.join(dir, 'page-images', `${pageIds[0]}.jpg`)
+    fs.mkdirSync(path.dirname(imagePath), { recursive: true })
+    fs.writeFileSync(imagePath, Buffer.from([0xff, 0xd8]))
+    setPageImagePath(db, pageIds[0], imagePath)
+
+    expect(fs.existsSync(imagePath)).toBe(true)
+    deleteNote(db, noteId)
+    expect(fs.existsSync(imagePath)).toBe(false)
+    expect(listNotePageImages(db, noteId)).toEqual([])
+    expect(listNotePageImages(db, other.id)).toEqual([])
   })
 })

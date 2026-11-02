@@ -982,6 +982,10 @@ export default function App() {
     setQuestions(await window.sourcenote.listQuestions(noteId))
   }, [])
 
+  const refreshPages = useCallback(async (noteId: number) => {
+    setPages(await window.sourcenote.listPages(noteId))
+  }, [])
+
   useEffect(() => {
     if (selectedNoteId !== null) {
       void refreshSources(selectedNoteId)
@@ -1096,11 +1100,13 @@ export default function App() {
         } else {
           void refreshSummary(event.noteId)
         }
+        // The vision step may have read slide images during the run.
+        void refreshPages(event.noteId)
         void refreshSpend()
       }
     })
     return unsubscribe
-  }, [selectedNoteId, refreshSummary, refreshSpend, reportError, pushToast, lang])
+  }, [selectedNoteId, refreshSummary, refreshPages, refreshSpend, reportError, pushToast, lang])
 
   useEffect(() => {
     const unsubscribe = window.sourcenote.onCorrectionProgress((event) => {
@@ -1375,6 +1381,8 @@ export default function App() {
       if (qaNoteRef.current !== noteId) return
       setQaRevealId(answer.id)
       await refreshQuestions(noteId)
+      // The vision step may have read slide images during the run.
+      await refreshPages(noteId)
       await refreshSpend()
     } catch (err) {
       if (qaNoteRef.current !== noteId) return
@@ -1412,6 +1420,8 @@ export default function App() {
         'info',
         t(lang, 'toastCheckDone', { sentences: result.claims.length, flagged }),
       )
+      // The vision step may have read slide images during the run.
+      await refreshPages(selectedNoteId)
       await refreshSpend()
     } catch (err) {
       setCheckStage(null)
@@ -1600,6 +1610,13 @@ export default function App() {
             displayName: pdfDoneSources[0].display_name,
           }
         : null
+  // What Muse Spark read from the current page image, if anything.
+  const effectiveSlideVisual =
+    effectiveSlide !== null
+      ? (pages.find(
+          (p) => p.sourceId === effectiveSlide.sourceId && p.pageNo === effectiveSlide.pageNo,
+        )?.visualText ?? null)
+      : null
 
   const sampleList = (
     <ul className="sample-list">
@@ -1815,6 +1832,7 @@ export default function App() {
             pageNo={effectiveSlide.pageNo}
             displayName={effectiveSlide.displayName}
             totalPages={pageCountBySource.get(effectiveSlide.sourceId) ?? effectiveSlide.pageNo}
+            visualText={effectiveSlideVisual}
             onNavigate={(pageNo) =>
               setSlideSel({
                 sourceId: effectiveSlide.sourceId,

@@ -129,6 +129,11 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE summaries ADD COLUMN question TEXT;
   `,
+  // version 8: rendered slide images + Muse Spark vision text per page
+  `
+  ALTER TABLE pages ADD COLUMN image_path TEXT;
+  ALTER TABLE pages ADD COLUMN visual_text TEXT;
+  `,
 ]
 
 export function openDb(filePath: string): DatabaseSync {
@@ -248,6 +253,17 @@ export function deleteNote(
       id: number
     }>
   ).map((row) => row.id)
+  // Rendered page images live on disk outside the DB; collect their paths
+  // before the rows go so the files can be removed afterwards.
+  const imagePaths = (
+    db
+      .prepare(
+        'SELECT pg.image_path AS imagePath FROM pages pg ' +
+          'JOIN sources src ON src.id = pg.source_id ' +
+          'WHERE src.note_id = ? AND pg.image_path IS NOT NULL',
+      )
+      .all(id) as unknown as Array<{ imagePath: string }>
+  ).map((row) => row.imagePath)
   db.exec('BEGIN')
   try {
     const claimsOfNote =
@@ -270,6 +286,14 @@ export function deleteNote(
       // Already rolled back; fall through to the original error.
     }
     throw err
+  }
+  // Best effort: the page image files of the deleted note leave with it.
+  for (const imagePath of imagePaths) {
+    try {
+      fs.rmSync(imagePath, { force: true })
+    } catch {
+      // A leftover image file is harmless; the note itself is gone.
+    }
   }
   return sourceIds
 }
@@ -556,7 +580,7 @@ export function listSourcePages(db: DatabaseSync, sourceId: number): NotePage[] 
   const rows = db
     .prepare(
       'SELECT pg.id AS id, pg.source_id AS sourceId, pg.page_no AS pageNo, ' +
-        'pg.text AS text, src.display_name AS displayName ' +
+        'pg.text AS text, src.display_name AS displayName, pg.visual_text AS visualText ' +
         'FROM pages pg JOIN sources src ON src.id = pg.source_id ' +
         'WHERE pg.source_id = ? ORDER BY pg.page_no',
     )
@@ -572,13 +596,67 @@ export function listNotePages(db: DatabaseSync, noteId: number): NotePage[] {
   const rows = db
     .prepare(
       'SELECT pg.id AS id, pg.source_id AS sourceId, pg.page_no AS pageNo, ' +
-        'pg.text AS text, src.display_name AS displayName ' +
+        'pg.text AS text, src.display_name AS displayName, pg.visual_text AS visualText ' +
         'FROM pages pg JOIN sources src ON src.id = pg.source_id ' +
         "WHERE src.note_id = ? AND src.kind = 'pdf' AND src.status = 'done' " +
         'ORDER BY src.id, pg.page_no',
     )
     .all(noteId) as unknown as NotePage[]
   return rows
+}
+
+/**
+ * A note's PDF page with its on-disk image state and the source file path.
+ * Main-process only: `imagePath`/`originalPath` never reach the renderer.
+ */
+export interface NotePageImage {
+  pageId: number
+  sourceId: number
+  pageNo: number
+  text: string
+  displayName: string
+  /** Absolute path of the source PDF (used to render the page image). */
+  originalPath: string
+  /** Absolute path of the rendered JPEG; null until rendered. */
+  imagePath: string | null
+  /** Vision description; null = not read yet, '' = nothing visual beyond text. */
+  visualText: string | null
+}
+
+/** Like listNotePages, plus the main-only image/source paths for the vision step. */
+export function listNotePageImages(db: DatabaseSync, noteId: number): NotePageImage[] {
+  const rows = db
+    .prepare(
+      'SELECT pg.id AS pageId, pg.source_id AS sourceId, pg.page_no AS pageNo, ' +
+        'pg.text AS text, src.display_name AS displayName, ' +
+        'src.original_path AS originalPath, pg.image_path AS imagePath, ' +
+        'pg.visual_text AS visualText ' +
+        'FROM pages pg JOIN sources src ON src.id = pg.source_id ' +
+        "WHERE src.note_id = ? AND src.kind = 'pdf' AND src.status = 'done' " +
+        'ORDER BY src.id, pg.page_no',
+    )
+    .all(noteId) as unknown as NotePageImage[]
+  return rows
+}
+
+/** Stores the rendered JPEG path of a page. */
+export function setPageImagePath(db: DatabaseSync, pageId: number, imagePath: string): void {
+  db.prepare('UPDATE pages SET image_path = ? WHERE id = ?').run(imagePath, pageId)
+}
+
+/** Stores the vision description of a page ('' when nothing visual was found). */
+export function setPageVisualText(db: DatabaseSync, pageId: number, visualText: string): void {
+  db.prepare('UPDATE pages SET visual_text = ? WHERE id = ?').run(visualText, pageId)
+}
+
+/** Absolute image paths of the given pages (only rows with image_path set). */
+export function pageImagePathMap(db: DatabaseSync, pageIds: number[]): Map<number, string> {
+  if (pageIds.length === 0) return new Map()
+  const marks = pageIds.map(() => '?').join(', ')
+  const rows = db
+    .prepare(`SELECT id, image_path AS imagePath FROM pages WHERE id IN (${marks}) AND image_path IS NOT NULL`)
+    .all(...pageIds) as unknown as Array<{ id: number; imagePath: string }>
+  return new Map(rows.map((row) => [row.id, row.imagePath]))
 }
 
 /**

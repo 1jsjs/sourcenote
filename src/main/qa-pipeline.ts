@@ -16,6 +16,7 @@ import {
 } from './grounding'
 import { langMsg } from './lang'
 import type { ChatMessage, MetaApi } from './meta-api'
+import { ensurePageImages, readSlideVisuals } from './slide-vision'
 import { storeAndVerifyClaims } from './verify-claims'
 
 /**
@@ -86,6 +87,8 @@ export interface QaPipelineDeps {
   metaApi: MetaApi
   model?: string
   language?: AppLanguage
+  /** Data dir holding page-images/; defaults to the app data dir. */
+  dataDir?: string
 }
 
 function errorMessage(err: unknown): string {
@@ -103,7 +106,7 @@ export async function runQaPipeline(
   const question = normalizeQuestion(rawQuestion, language)
 
   const segments = listNoteSegments(db, noteId)
-  const pages = listNotePages(db, noteId)
+  let pages = listNotePages(db, noteId)
   if (segments.length === 0 && pages.length === 0) {
     throw new Error(
       langMsg(language, '질문에 답할 강의 자료가 없습니다', 'No lecture materials to answer from'),
@@ -113,6 +116,11 @@ export async function runQaPipeline(
   const summary = createSummary(db, noteId, model, 'qa', language, question)
   try {
     // 1. Answer with citations, from the materials only.
+    // Look at the slides first: render the page images locally, then read
+    // them once with vision so figure/table content joins the text evidence.
+    await ensurePageImages(db, noteId, deps.dataDir)
+    await readSlideVisuals({ db, metaApi, model, language, noteId })
+    pages = listNotePages(db, noteId)
     const numbered = numberSegments(segments)
     const numberedPages = numberPages(pages)
     const answerRaw = await metaApi.chat({

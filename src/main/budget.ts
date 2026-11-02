@@ -73,6 +73,13 @@ export function estimateChatCostUsd(model: string, promptChars: number, maxToken
   return chatCostUsd(model, promptTokens, outputTokens)
 }
 
+/**
+ * Fixed pre-call estimate per image content part, in "prompt chars" (the
+ * estimate above divides chars by 2, so 4000 chars ≈ 2000 tokens). A 1280px
+ * slide JPEG bills ~650 prompt tokens, so this stays conservative.
+ */
+export const IMAGE_ESTIMATE_CHARS = 4000
+
 /** Transcribe estimate made BEFORE the call, from the chunk duration. */
 export function estimateTranscribeCostUsd(chunkDurationMs: number): number {
   return transcribeCostUsd(chunkDurationMs)

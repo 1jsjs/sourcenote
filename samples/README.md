@@ -6,11 +6,11 @@ Everything here was written for Sourcenote during the hackathon and may be reuse
 | File | What it is |
 |---|---|
 | `lecture-script.txt` | The lecture script, one paragraph per line |
-| `demo-lecture.m4a` | Local text-to-speech of the script with [Supertonic 3](https://huggingface.co/Supertone/supertonic-3) (voice: F1; code MIT, model OpenRAIL-M), 1.6 s pause between paragraphs (94 s) |
-| `demo-slides.pdf` | 4 slides with the English terms; slide 4 adds *Warmup*, which the lecture never says |
+| `demo-lecture.m4a` | Local text-to-speech of the script with [Supertonic 3](https://huggingface.co/Supertone/supertonic-3) (voice: F1; code MIT, model OpenRAIL-M), 1.6 s pause between paragraphs (109 s) |
+| `demo-slides.pdf` | 5 slides with the English terms. Slide 3 is a loss-curve chart for three learning rates: the lecture only says "look at the graph", so which curve diverges or falls fastest is in the image alone (pdf.js extracts just the legend and axis numbers). Slide 5 adds *Warmup*, which the lecture never says |
 | `demo-slides.html` | Source of the slides (printed to PDF with headless Chrome) |
-| `lecture-script-en.txt`, `demo-slides-en.html` | English version (same voice, 84 s) |
-| `notes/ko-gradient-descent/`, `notes/en-gradient-descent/` | Ready-made sample notes (`sample-note/v1`): transcript, slides, accepted corrections, cited summary and a notes check, produced by the real pipeline with Muse Voice Transcribe and Muse Spark. The app opens them without an API key (**Open sample note**). |
+| `lecture-script-en.txt`, `demo-slides-en.html` | English version (same voice, 96 s) |
+| `notes/ko-gradient-descent/`, `notes/en-gradient-descent/` | Ready-made sample notes (`sample-note/v1`): transcript, slides, accepted corrections, cited summary, a notes check and answered questions, produced by the real pipeline with Muse Voice Transcribe and Muse Spark (including the slide-image reading). The app opens them without an API key (**Open sample note**). |
 
 ## Try it from the command line
 

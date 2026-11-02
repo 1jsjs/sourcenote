@@ -15,6 +15,8 @@ interface SlidePanelProps {
   pageNo: number
   displayName: string
   totalPages: number
+  /** Muse Spark's description of the page image; shown when non-empty. */
+  visualText?: string | null
   onNavigate: (pageNo: number) => void
 }
 
@@ -25,6 +27,7 @@ export default function SlidePanel({
   pageNo,
   displayName,
   totalPages,
+  visualText,
   onNavigate,
 }: SlidePanelProps) {
   const wrapRef = useRef<HTMLDivElement | null>(null)
@@ -135,6 +138,12 @@ export default function SlidePanel({
           style={loading || error !== null ? { display: 'none' } : undefined}
         />
       </div>
+      {visualText != null && visualText.trim().length > 0 && (
+        <div className="slide-visual">
+          <p className="slide-visual-label">{t(lang, 'slideVisualLabel')}</p>
+          <p className="slide-visual-text">{visualText}</p>
+        </div>
+      )}
       <footer className="slide-nav">
         <Button
           size="sm"

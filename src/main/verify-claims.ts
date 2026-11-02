@@ -1,24 +1,31 @@
 import type { DatabaseSync } from 'node:sqlite'
 import type { AppLanguage, NotePage } from '../shared/types'
-import { insertClaimsWithCitations, setClaimVerdict, type NewClaim, type NoteSegment } from './db'
+import { insertClaimsWithCitations, pageImagePathMap, setClaimVerdict, type NewClaim, type NoteSegment } from './db'
 import {
   applyVerifyResults,
   buildVerifyMessages,
   formatSlideEvidence,
   formatTranscriptEvidence,
+  MAX_VERIFY_IMAGES,
+  pageEvidenceText,
   splitBatches,
   VERIFY_SCHEMA,
   VERIFY_SCHEMA_NAME,
   validateVerifyPayload,
+  type VerifyImage,
   type VerifyItem,
 } from './grounding'
 import type { MetaApi } from './meta-api'
+import { imagePartFromFile } from './slide-vision'
 
 /**
  * Shared second half of every grounded pipeline (summary, notes check, Q&A):
  * store the cited claims, then verify each one against ONLY its cited
  * evidence, in batches. A claim with no citations is stored as unsupported
- * with `zeroCitationReason` and never sent for verification.
+ * with `zeroCitationReason` and never sent for verification. When a cited
+ * slide page has a rendered image on disk, the image itself is attached to
+ * the verification call (at most MAX_VERIFY_IMAGES per call, first-cited
+ * order) so the checker judges figures against the slide, not only text.
  */
 
 export interface CitedClaim {
@@ -70,13 +77,13 @@ export async function storeAndVerifyClaims(opts: StoreAndVerifyOptions): Promise
         }),
         ...c.pageDbIds.map((id) => {
           const p = pageByDbId.get(id)
-          return formatSlideEvidence(p?.pageNo ?? 0, p?.text ?? '')
+          return formatSlideEvidence(p?.pageNo ?? 0, pageEvidenceText(p?.text ?? '', p?.visualText))
         }),
       ],
     }))
     const verifyRaw = await metaApi.chat({
       model,
-      messages: buildVerifyMessages(items, language),
+      messages: buildVerifyMessages(items, language, citedSlideImages(db, batch, pageByDbId)),
       responseFormat: { name: VERIFY_SCHEMA_NAME, schema: VERIFY_SCHEMA },
     })
     const resolved = applyVerifyResults(
@@ -90,4 +97,40 @@ export async function storeAndVerifyClaims(opts: StoreAndVerifyOptions): Promise
       setClaimVerdict(db, claimId, r.supported ? 'supported' : 'unsupported', r.reason)
     }
   }
+}
+
+/**
+ * Images of the distinct cited pages of one batch, in first-cited order,
+ * capped at MAX_VERIFY_IMAGES. Pages without a readable image file keep
+ * text-only evidence.
+ */
+function citedSlideImages(
+  db: DatabaseSync,
+  batch: CitedClaim[],
+  pageByDbId: Map<number, NotePage>,
+): VerifyImage[] {
+  const citedPageIds: number[] = []
+  const seen = new Set<number>()
+  for (const claim of batch) {
+    for (const pageId of claim.pageDbIds) {
+      if (!seen.has(pageId)) {
+        seen.add(pageId)
+        citedPageIds.push(pageId)
+      }
+    }
+  }
+  const imagePathById = pageImagePathMap(db, citedPageIds)
+  const images: VerifyImage[] = []
+  for (const pageId of citedPageIds) {
+    if (images.length >= MAX_VERIFY_IMAGES) break
+    const imagePath = imagePathById.get(pageId)
+    const page = pageByDbId.get(pageId)
+    if (imagePath === undefined || page === undefined) continue
+    try {
+      images.push({ pageNo: page.pageNo, part: imagePartFromFile(imagePath) })
+    } catch {
+      // Unreadable image file: the page stays text-only evidence.
+    }
+  }
+  return images
 }

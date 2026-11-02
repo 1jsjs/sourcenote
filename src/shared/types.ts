@@ -118,6 +118,12 @@ export interface NotePage {
   pageNo: number
   text: string
   displayName: string
+  /**
+   * Muse Spark's description of the page image (charts, diagrams, tables):
+   * null until the page has been read, '' when there is nothing visual
+   * beyond the extracted text.
+   */
+  visualText: string | null
 }
 
 export interface Summary {
