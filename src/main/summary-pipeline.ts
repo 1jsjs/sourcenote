@@ -1,6 +1,14 @@
 import type { DatabaseSync } from 'node:sqlite'
 import type { AppLanguage, Summary, SummaryProgressEvent } from '../shared/types'
-import { createSummary, getLatestSummary, listNotePages, listNoteSegments, setSummaryStatus } from './db'
+import { isNoteLanguage, resolveOutputLanguage } from '../shared/languages'
+import {
+  createSummary,
+  getLatestSummary,
+  getNote,
+  listNotePages,
+  listNoteSegments,
+  setSummaryStatus,
+} from './db'
 import {
   buildSummaryMessages,
   DEFAULT_SUMMARY_MODEL,
@@ -30,7 +38,10 @@ export interface SummaryPipelineDeps {
   db: DatabaseSync
   metaApi: MetaApi
   model?: string
+  /** UI language for app-side fixed messages and errors. */
   language?: AppLanguage
+  /** AI output language name; defaults to the note's note_language resolved. */
+  outputLanguage?: string
   /** Data dir holding page-images/; defaults to the app data dir. */
   dataDir?: string
   onProgress?: (event: SummaryProgressEvent) => void
@@ -47,6 +58,13 @@ export async function runSummaryPipeline(
   const { db, metaApi, onProgress } = deps
   const model = deps.model ?? DEFAULT_SUMMARY_MODEL
   const language: AppLanguage = deps.language ?? 'ko'
+  const note = getNote(db, noteId)
+  const outputLanguage =
+    deps.outputLanguage ??
+    resolveOutputLanguage(
+      note && isNoteLanguage(note.note_language) ? note.note_language : 'app',
+      language,
+    )
 
   const segments = listNoteSegments(db, noteId)
   let pages = listNotePages(db, noteId)
@@ -54,7 +72,7 @@ export async function runSummaryPipeline(
     throw new Error(langMsg(language, '요약할 자료가 없습니다', 'No evidence to summarize'))
   }
 
-  const summary = createSummary(db, noteId, model, 'auto', language)
+  const summary = createSummary(db, noteId, model, 'auto', outputLanguage)
   const report = (stage: SummaryProgressEvent['stage'], message?: string): void => {
     onProgress?.({ noteId, summaryId: summary.id, stage, message })
   }
@@ -65,7 +83,7 @@ export async function runSummaryPipeline(
     // Look at the slides first: render the page images locally, then read
     // them once with vision so figure/table content joins the text evidence.
     await ensurePageImages(db, noteId, deps.dataDir)
-    await readSlideVisuals({ db, metaApi, model, language, noteId })
+    await readSlideVisuals({ db, metaApi, model, outputLanguage, noteId })
     pages = listNotePages(db, noteId)
     const numbered = numberSegments(segments)
     const numberedPages = numberPages(pages)
@@ -73,7 +91,7 @@ export async function runSummaryPipeline(
     const pageByNumber = pageIdByNumberMap(numberedPages)
     const summaryRaw = await metaApi.chat({
       model,
-      messages: buildSummaryMessages(numbered, numberedPages, language),
+      messages: buildSummaryMessages(numbered, numberedPages, outputLanguage),
       responseFormat: { name: SUMMARY_SCHEMA_NAME, schema: SUMMARY_SCHEMA },
     })
     const mapped = mapSummaryClaims(validateSummaryPayload(summaryRaw), byNumber, pageByNumber)
@@ -83,12 +101,12 @@ export async function runSummaryPipeline(
       db,
       metaApi,
       model,
-      language,
+      outputLanguage,
       summaryId: summary.id,
       claims: mapped,
       segments,
       pages,
-      zeroCitationReason: zeroCitationReason(language),
+      zeroCitationReason: zeroCitationReason(outputLanguage),
       onVerifying: () => report('verifying'),
     })
 

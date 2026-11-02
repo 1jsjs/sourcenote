@@ -75,6 +75,11 @@ export interface TranscribeChunkOptions {
   /** Planned chunk length, used for the pre-call estimate and as billing fallback. */
   chunkDurationMs: number
   fileName?: string
+  /**
+   * Language bias list from the note's lecture language. Undefined sends the
+   * default ['Korean', 'English']; null omits the key (auto-detect).
+   */
+  languageBias?: string[] | null
 }
 
 /**
@@ -165,12 +170,15 @@ export function createMetaApi(deps: MetaApiDeps): MetaApi {
       const key = await getKey(language)
       const bytes = fs.readFileSync(opts.chunkPath)
 
-      const requestJson = JSON.stringify({
+      const request: Record<string, unknown> = {
         model: TRANSCRIBE_MODEL,
         audioEncoding: 'WAV',
         mode: 'ENDPOINTING',
-        languageBias: ['Korean', 'English'],
-      })
+      }
+      // undefined -> the default Korean+English bias; null -> auto-detect (key omitted).
+      const bias = opts.languageBias === undefined ? ['Korean', 'English'] : opts.languageBias
+      if (bias !== null) request.languageBias = bias
+      const requestJson = JSON.stringify(request)
       const form = new FormData()
       form.append('request', new Blob([requestJson], { type: 'application/json' }))
       form.append(

@@ -1,6 +1,14 @@
 import type { DatabaseSync } from 'node:sqlite'
 import type { AppLanguage, CheckProgressEvent, Summary } from '../shared/types'
-import { createSummary, getLatestCheck, listNotePages, listNoteSegments, setSummaryStatus } from './db'
+import { isNoteLanguage, outputLanguageName, resolveOutputLanguage } from '../shared/languages'
+import {
+  createSummary,
+  getLatestCheck,
+  getNote,
+  listNotePages,
+  listNoteSegments,
+  setSummaryStatus,
+} from './db'
 import { langMsg } from './lang'
 import {
   DEFAULT_SUMMARY_MODEL,
@@ -9,6 +17,7 @@ import {
   numberPages,
   numberSegments,
   pageIdByNumberMap,
+  promptForOutput,
   stripClaimCitationMarkers,
 } from './grounding'
 import { splitSentences } from '../shared/sentences'
@@ -30,9 +39,11 @@ export const MAX_CHECK_SENTENCES = 30
 /** Reason stored when no evidence cites a user sentence (Korean; use the getter). */
 export const CHECK_ZERO_CITATION_REASON = '강의 자료에서 근거를 찾지 못했습니다'
 
-/** Fixed reason stored when no evidence cites a user sentence, in the check language. */
-export function checkZeroCitationReason(language: AppLanguage): string {
-  return langMsg(language, CHECK_ZERO_CITATION_REASON, 'No supporting evidence found in the lecture materials')
+/** Fixed reason stored when no evidence cites a user sentence, in the output language. */
+export function checkZeroCitationReason(outputLanguage: string): string {
+  return outputLanguageName(outputLanguage) === 'Korean'
+    ? CHECK_ZERO_CITATION_REASON
+    : 'No supporting evidence found in the lecture materials'
 }
 
 export const CHECK_LOCATE_SYSTEM_PROMPT =
@@ -43,19 +54,23 @@ export const CHECK_LOCATE_SYSTEM_PROMPT =
   'Do not write segment or slide numbers like [3] or [P2] inside any text. ' +
   'Reply in Korean.'
 
-/** Locate system prompt in the requested output language. */
-export function checkLocateSystemPrompt(language: AppLanguage): string {
-  if (language === 'en') {
-    return (
-      'You are a lecture evidence finder. For each user sentence below, return the numbers ' +
-      'of the transcript segments ([n]) and/or slide pages ([Pk]) that are most relevant ' +
-      'to checking it. A sentence may have no relevant evidence: return empty arrays then. ' +
-      'Keep the sentence index and exact text as given: do NOT rewrite the sentences. ' +
-      'Do not write segment or slide numbers like [3] or [P2] inside any text. ' +
-      'Reply in English.'
-    )
-  }
-  return CHECK_LOCATE_SYSTEM_PROMPT
+/** English variant of the locate prompt (reply in English). */
+export const CHECK_LOCATE_SYSTEM_PROMPT_EN =
+  'You are a lecture evidence finder. For each user sentence below, return the numbers ' +
+  'of the transcript segments ([n]) and/or slide pages ([Pk]) that are most relevant ' +
+  'to checking it. A sentence may have no relevant evidence: return empty arrays then. ' +
+  'Keep the sentence index and exact text as given: do NOT rewrite the sentences. ' +
+  'Do not write segment or slide numbers like [3] or [P2] inside any text. ' +
+  'Reply in English.'
+
+/**
+ * Locate system prompt in the requested output language: the dedicated
+ * Korean/English variants, or the English variant re-pointed at the name.
+ */
+export function checkLocateSystemPrompt(outputLanguage: string): string {
+  const name = outputLanguageName(outputLanguage)
+  if (name === 'Korean') return CHECK_LOCATE_SYSTEM_PROMPT
+  return promptForOutput(CHECK_LOCATE_SYSTEM_PROMPT_EN, name)
 }
 
 export const CHECK_LOCATE_SCHEMA_NAME = 'check_evidence_locate'
@@ -114,7 +129,7 @@ export function buildCheckLocateMessages(
   sentences: string[],
   transcriptLines: string[],
   slideLines: string[] = [],
-  language: AppLanguage = 'ko',
+  outputLanguage: string = 'ko',
 ): ChatMessage[] {
   const parts = sentences.map((s, i) => formatCheckSentenceLine(i, s))
   parts.push('Transcript:')
@@ -123,7 +138,10 @@ export function buildCheckLocateMessages(
     parts.push('Slides:')
     parts.push(...slideLines)
   }
-  return [{ role: 'system', content: checkLocateSystemPrompt(language) }, { role: 'user', content: parts.join('\n') }]
+  return [
+    { role: 'system', content: checkLocateSystemPrompt(outputLanguage) },
+    { role: 'user', content: parts.join('\n') },
+  ]
 }
 
 export interface CheckLocateRaw {
@@ -202,7 +220,10 @@ export interface CheckPipelineDeps {
   db: DatabaseSync
   metaApi: MetaApi
   model?: string
+  /** UI language for app-side fixed messages and errors. */
   language?: AppLanguage
+  /** AI output language name; defaults to the note's note_language resolved. */
+  outputLanguage?: string
   /** Data dir holding page-images/; defaults to the app data dir. */
   dataDir?: string
   onProgress?: (event: CheckProgressEvent) => void
@@ -220,6 +241,13 @@ export async function runCheckPipeline(
   const { db, metaApi, onProgress } = deps
   const model = deps.model ?? DEFAULT_SUMMARY_MODEL
   const language: AppLanguage = deps.language ?? 'ko'
+  const note = getNote(db, noteId)
+  const outputLanguage =
+    deps.outputLanguage ??
+    resolveOutputLanguage(
+      note && isNoteLanguage(note.note_language) ? note.note_language : 'app',
+      language,
+    )
   const report = (stage: CheckProgressEvent['stage'], message?: string): void => {
     onProgress?.({ noteId, stage, message })
   }
@@ -231,14 +259,14 @@ export async function runCheckPipeline(
     throw new Error(langMsg(language, '검증할 강의 자료가 없습니다', 'No lecture evidence to check against'))
   }
 
-  const summary = createSummary(db, noteId, model, 'check', language)
+  const summary = createSummary(db, noteId, model, 'check', outputLanguage)
   try {
     // 1. Locate the most relevant evidence per user sentence.
     report('locating')
     // Look at the slides first: render the page images locally, then read
     // them once with vision so figure/table content joins the text evidence.
     await ensurePageImages(db, noteId, deps.dataDir)
-    await readSlideVisuals({ db, metaApi, model, language, noteId })
+    await readSlideVisuals({ db, metaApi, model, outputLanguage, noteId })
     pages = listNotePages(db, noteId)
     const numbered = numberSegments(segments)
     const numberedPages = numberPages(pages)
@@ -248,7 +276,7 @@ export async function runCheckPipeline(
         sentences,
         numbered.map((s) => s.line),
         numberedPages.map((p) => p.line),
-        language,
+        outputLanguage,
       ),
       responseFormat: { name: CHECK_LOCATE_SCHEMA_NAME, schema: CHECK_LOCATE_SCHEMA },
     })
@@ -264,12 +292,12 @@ export async function runCheckPipeline(
       db,
       metaApi,
       model,
-      language,
+      outputLanguage,
       summaryId: summary.id,
       claims: mapped.map((c) => ({ ...c, idx: c.sentenceIdx })),
       segments,
       pages,
-      zeroCitationReason: checkZeroCitationReason(language),
+      zeroCitationReason: checkZeroCitationReason(outputLanguage),
       onVerifying: () => report('verifying'),
     })
 

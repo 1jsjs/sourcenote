@@ -1,4 +1,5 @@
 import type { AppLanguage } from '../../shared/types'
+import { languageLabel } from '../../shared/languages'
 
 /**
  * Renderer strings. Every user-visible string lives here; `ko` keeps the
@@ -86,6 +87,12 @@ export const messages = {
     openSample: '샘플 노트 열기',
     sampleLanguageKo: '한국어',
     sampleLanguageEn: 'English',
+    lectureLanguageLabel: '강의 언어',
+    noteLanguageLabel: '노트 언어',
+    lectureLangDefault: '한국어 + 영어 (기본)',
+    lectureLangAuto: '자동 감지',
+    noteLangSameAsApp: '앱 언어와 같게',
+    lectureLangHint: '다음에 넣는 녹음부터 적용',
     emptyTitle: 'Sourcenote는 강의 녹음과 슬라이드에서 근거 있는 요약 노트를 만듭니다.',
     emptyHint: 'API 키 없이 샘플 노트로 바로 살펴보세요.',
     importing: '가져오는 중…',
@@ -243,6 +250,12 @@ export const messages = {
     openSample: 'Open sample note',
     sampleLanguageKo: 'Korean',
     sampleLanguageEn: 'English',
+    lectureLanguageLabel: 'Lecture language',
+    noteLanguageLabel: 'Note language',
+    lectureLangDefault: 'Korean + English (default)',
+    lectureLangAuto: 'Auto-detect',
+    noteLangSameAsApp: 'Same as app language',
+    lectureLangHint: 'Applies to recordings added next',
     emptyTitle: 'Sourcenote turns lecture recordings and slides into cited notes.',
     emptyHint: 'Explore a sample note right away. No API key needed.',
     importing: 'Importing…',
@@ -341,8 +354,12 @@ export function t(
   return text
 }
 
-/** Display name of a sample language in the current UI language. */
-export function sampleLanguageLabel(uiLang: AppLanguage, sampleLang: AppLanguage): string {
-  if (sampleLang === 'en') return t(uiLang, 'sampleLanguageEn')
-  return t(uiLang, 'sampleLanguageKo')
+/**
+ * Display name of a sample language in the current UI language. Older sample
+ * files store 'ko'/'en'; newer ones store a supported language name.
+ */
+export function sampleLanguageLabel(uiLang: AppLanguage, sampleLang: string): string {
+  if (sampleLang === 'en' || sampleLang === 'English') return t(uiLang, 'sampleLanguageEn')
+  if (sampleLang === 'ko' || sampleLang === 'Korean') return t(uiLang, 'sampleLanguageKo')
+  return languageLabel(sampleLang, uiLang)
 }

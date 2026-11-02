@@ -1,7 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
-import type { AppLanguage, Note, SampleInfo, Summary, SummaryKind } from '../shared/types'
+import type { Note, SampleInfo, Summary, SummaryKind } from '../shared/types'
+import { isLanguageValue, isLectureLanguage, isNoteLanguage } from '../shared/languages'
 import {
   getLatestSummaryByKind,
   listQuestionAnswers,
@@ -79,7 +80,8 @@ export interface SampleSummary {
   kind: SummaryKind
   /** The question a 'qa' summary answers; absent for other kinds. */
   question?: string
-  language: AppLanguage
+  /** Output language: a language name, or 'ko'/'en' in older files. */
+  language: string
   model: string
   status: 'summarizing' | 'verifying' | 'done' | 'error'
   claims: SampleClaim[]
@@ -88,7 +90,11 @@ export interface SampleSummary {
 export interface SampleNote {
   format: typeof SAMPLE_FORMAT
   title: string
-  language: AppLanguage
+  /** Sample list label language: a language name, or 'ko'/'en' in older files. */
+  language: string
+  /** Optional per-note languages; absent means the defaults ('default'/'app'). */
+  lectureLanguage?: string
+  noteLanguage?: string
   sources: SampleSource[]
   corrections: SampleCorrection[]
   summaries: SampleSummary[]
@@ -127,8 +133,28 @@ function asArray(obj: Record<string, unknown>, key: string): unknown[] {
   return value
 }
 
-function parseLanguage(value: unknown): AppLanguage {
-  if (value !== 'ko' && value !== 'en') throw invalid('"language" must be "ko" or "en"')
+/**
+ * Sample files written before per-note languages store 'ko'/'en'; newer ones
+ * store a supported language name. Both are accepted; anything else throws.
+ */
+function parseLanguage(value: unknown): string {
+  if (value !== 'ko' && value !== 'en' && !isLanguageValue(value)) {
+    throw invalid('"language" must be "ko", "en" or a supported language name')
+  }
+  return value
+}
+
+/** Optional per-note language fields; absent falls back to the DB defaults. */
+function parseOptionalLanguage(
+  obj: Record<string, unknown>,
+  key: 'lectureLanguage' | 'noteLanguage',
+): string | undefined {
+  const value = obj[key]
+  if (value === undefined) return undefined
+  const valid =
+    typeof value === 'string' &&
+    (key === 'lectureLanguage' ? isLectureLanguage(value) : isNoteLanguage(value))
+  if (!valid) throw invalid(`"${key}" is not a supported language`)
   return value
 }
 
@@ -267,7 +293,7 @@ function parseSummary(raw: unknown): SampleSummary {
 export function parseSampleNote(raw: unknown): SampleNote {
   if (!isRecord(raw)) throw invalid('root must be an object')
   if (raw.format !== SAMPLE_FORMAT) throw invalid(`"format" must be "${SAMPLE_FORMAT}"`)
-  return {
+  const note: SampleNote = {
     format: SAMPLE_FORMAT,
     title: asString(raw, 'title'),
     language: parseLanguage(raw.language),
@@ -275,6 +301,11 @@ export function parseSampleNote(raw: unknown): SampleNote {
     corrections: asArray(raw, 'corrections').map(parseCorrection),
     summaries: asArray(raw, 'summaries').map(parseSummary),
   }
+  const lectureLanguage = parseOptionalLanguage(raw, 'lectureLanguage')
+  const noteLanguage = parseOptionalLanguage(raw, 'noteLanguage')
+  if (lectureLanguage !== undefined) note.lectureLanguage = lectureLanguage
+  if (noteLanguage !== undefined) note.noteLanguage = noteLanguage
+  return note
 }
 
 // ---------------------------------------------------------------------------
@@ -377,9 +408,18 @@ export function serializeSampleNote(db: DatabaseSync, noteId: number): SampleNot
   }
 
   // The newest summary language is a good default for the note language.
-  const language: AppLanguage =
+  const language: string =
     summaries.length > 0 ? summaries[summaries.length - 1].language : 'ko'
-  return { format: SAMPLE_FORMAT, title: note.title, language, sources: sampleSources, corrections, summaries }
+  return {
+    format: SAMPLE_FORMAT,
+    title: note.title,
+    language,
+    lectureLanguage: note.lecture_language,
+    noteLanguage: note.note_language,
+    sources: sampleSources,
+    corrections,
+    summaries,
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -413,8 +453,15 @@ export function importSampleNote(db: DatabaseSync, sampleDir: string, dataDir: s
   db.exec('BEGIN')
   try {
     const noteRes = db
-      .prepare('INSERT INTO notes (title, created_at) VALUES (?, ?)')
-      .run(sample.title, now)
+      .prepare(
+        'INSERT INTO notes (title, created_at, lecture_language, note_language) VALUES (?, ?, ?, ?)',
+      )
+      .run(
+        sample.title,
+        now,
+        sample.lectureLanguage ?? 'default',
+        sample.noteLanguage ?? 'app',
+      )
     const noteId = Number(noteRes.lastInsertRowid)
 
     // Fresh ids; citations resolve through these per-source maps.

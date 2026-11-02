@@ -39,12 +39,12 @@ describe('db v3 (slide pages)', () => {
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
-  it('opens at user_version 8', () => {
+  it('opens at user_version 9', () => {
     const row = db.prepare('PRAGMA user_version').get() as { user_version: number }
-    expect(row.user_version).toBe(8)
+    expect(row.user_version).toBe(9)
   })
 
-  it('migrates a v2 database file to v8 without losing data', () => {
+  it('migrates a v2 database file to v9 without losing data', () => {
     const note = createNote(db, '기존 노트')
     const source = createSource(db, {
       noteId: note.id,
@@ -68,12 +68,15 @@ describe('db v3 (slide pages)', () => {
     db.exec('ALTER TABLE summaries DROP COLUMN kind')
     db.exec('ALTER TABLE summaries DROP COLUMN language')
     db.exec('ALTER TABLE summaries DROP COLUMN question')
+    // ...and the per-note language columns (v9).
+    db.exec('ALTER TABLE notes DROP COLUMN lecture_language')
+    db.exec('ALTER TABLE notes DROP COLUMN note_language')
     db.exec('PRAGMA user_version = 2')
     db.close()
 
     db = openDb(dbFile)
     const row = db.prepare('PRAGMA user_version').get() as { user_version: number }
-    expect(row.user_version).toBe(8)
+    expect(row.user_version).toBe(9)
     // v2 data survived the migration.
     const latest = getLatestSummary(db, note.id)
     expect(latest?.claims).toHaveLength(1)

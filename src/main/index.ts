@@ -33,6 +33,7 @@ import {
   openDb,
   removeNoteMedia,
   renameNote,
+  setNoteLanguages,
 } from './db'
 import { isFakeApiEnabled } from './fake-api'
 import { clearApiKey, type KeyCipher, KeyStoreError, loadApiKey, saveApiKey } from './key-store'
@@ -273,6 +274,17 @@ function registerIpc(getWindow: () => BrowserWindow | null): void {
       throw new Error(langMsg(currentLanguage(), '노트 제목을 입력하세요', 'Enter a note title'))
     }
     return renameNote(db, id, title, currentLanguage())
+  })
+
+  ipcMain.handle('notes:setLanguages', (_e, id: unknown, languages: unknown) => {
+    if (typeof id !== 'number') {
+      throw new Error(langMsg(currentLanguage(), '노트를 찾을 수 없습니다.', 'Note not found.'))
+    }
+    const patch =
+      languages !== null && typeof languages === 'object' && !Array.isArray(languages)
+        ? (languages as { lectureLanguage?: unknown; noteLanguage?: unknown })
+        : {}
+    return setNoteLanguages(db, id, patch, currentLanguage())
   })
 
   ipcMain.handle('notes:delete', (_e, id: unknown) => {

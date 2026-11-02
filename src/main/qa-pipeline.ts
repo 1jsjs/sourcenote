@@ -1,6 +1,14 @@
 import type { DatabaseSync } from 'node:sqlite'
 import type { AppLanguage, Summary } from '../shared/types'
-import { createSummary, listNotePages, listNoteSegments, listQuestionAnswers, setSummaryStatus } from './db'
+import { isNoteLanguage, outputLanguageName, resolveOutputLanguage } from '../shared/languages'
+import {
+  createSummary,
+  getNote,
+  listNotePages,
+  listNoteSegments,
+  listQuestionAnswers,
+  setSummaryStatus,
+} from './db'
 import {
   DEFAULT_SUMMARY_MODEL,
   idByNumberMap,
@@ -8,6 +16,7 @@ import {
   numberPages,
   numberSegments,
   pageIdByNumberMap,
+  SLIDE_TERMS_RULE,
   SUMMARY_SCHEMA,
   validateSummaryPayload,
   zeroCitationReason,
@@ -32,19 +41,19 @@ export const MAX_QUESTION_CHARS = 500
 
 export const QA_SCHEMA_NAME = 'lecture_answer'
 
-/** System prompt for answering in the requested language. */
-export function qaSystemPrompt(language: AppLanguage): string {
-  const lang = language === 'en' ? 'English' : 'Korean'
-  return (
-    `You answer a student's question about one lecture in ${lang}, using ONLY the ` +
+/** System prompt for answering in the requested output language. */
+export function qaSystemPrompt(outputLanguage: string): string {
+  const name = outputLanguageName(outputLanguage)
+  const prompt =
+    `You answer a student's question about one lecture in ${name}, using ONLY the ` +
     'transcript segments ([n]) and slide pages ([Pk]) below.\n' +
     'Answer in 1–5 short claims, the direct answer first.\n' +
     'Every claim MUST cite 1–5 transcript segments and/or slide pages that directly support it.\n' +
     'If the transcript and slides do not answer the question, return an empty claims list. ' +
     'Do not guess and do not use outside knowledge.\n' +
     'Do not write segment or slide numbers like [3] or [P2] inside the claim text.\n' +
-    `Reply in ${lang}.`
-  )
+    `Reply in ${name}.`
+  return name === 'Korean' || name === 'English' ? prompt : `${prompt}\n${SLIDE_TERMS_RULE}`
 }
 
 /** Trims the question; throws a localized error when it is empty or too long. */
@@ -69,7 +78,7 @@ export function buildQaMessages(
   question: string,
   numbered: NumberedSegment[],
   numberedPages: NumberedPage[] = [],
-  language: AppLanguage = 'ko',
+  outputLanguage: string = 'ko',
 ): ChatMessage[] {
   const parts = [`Question: ${question}`, 'Transcript:', ...numbered.map((s) => s.line)]
   if (numberedPages.length > 0) {
@@ -77,7 +86,7 @@ export function buildQaMessages(
     for (const p of numberedPages) parts.push(p.line)
   }
   return [
-    { role: 'system', content: qaSystemPrompt(language) },
+    { role: 'system', content: qaSystemPrompt(outputLanguage) },
     { role: 'user', content: parts.join('\n') },
   ]
 }
@@ -86,7 +95,10 @@ export interface QaPipelineDeps {
   db: DatabaseSync
   metaApi: MetaApi
   model?: string
+  /** UI language for app-side fixed messages and errors. */
   language?: AppLanguage
+  /** AI output language name; defaults to the note's note_language resolved. */
+  outputLanguage?: string
   /** Data dir holding page-images/; defaults to the app data dir. */
   dataDir?: string
 }
@@ -104,6 +116,13 @@ export async function runQaPipeline(
   const model = deps.model ?? DEFAULT_SUMMARY_MODEL
   const language: AppLanguage = deps.language ?? 'ko'
   const question = normalizeQuestion(rawQuestion, language)
+  const note = getNote(db, noteId)
+  const outputLanguage =
+    deps.outputLanguage ??
+    resolveOutputLanguage(
+      note && isNoteLanguage(note.note_language) ? note.note_language : 'app',
+      language,
+    )
 
   const segments = listNoteSegments(db, noteId)
   let pages = listNotePages(db, noteId)
@@ -113,19 +132,19 @@ export async function runQaPipeline(
     )
   }
 
-  const summary = createSummary(db, noteId, model, 'qa', language, question)
+  const summary = createSummary(db, noteId, model, 'qa', outputLanguage, question)
   try {
     // 1. Answer with citations, from the materials only.
     // Look at the slides first: render the page images locally, then read
     // them once with vision so figure/table content joins the text evidence.
     await ensurePageImages(db, noteId, deps.dataDir)
-    await readSlideVisuals({ db, metaApi, model, language, noteId })
+    await readSlideVisuals({ db, metaApi, model, outputLanguage, noteId })
     pages = listNotePages(db, noteId)
     const numbered = numberSegments(segments)
     const numberedPages = numberPages(pages)
     const answerRaw = await metaApi.chat({
       model,
-      messages: buildQaMessages(question, numbered, numberedPages, language),
+      messages: buildQaMessages(question, numbered, numberedPages, outputLanguage),
       responseFormat: { name: QA_SCHEMA_NAME, schema: SUMMARY_SCHEMA },
     })
     const mapped = mapSummaryClaims(
@@ -140,12 +159,12 @@ export async function runQaPipeline(
       db,
       metaApi,
       model,
-      language,
+      outputLanguage,
       summaryId: summary.id,
       claims: mapped,
       segments,
       pages,
-      zeroCitationReason: zeroCitationReason(language),
+      zeroCitationReason: zeroCitationReason(outputLanguage),
     })
 
     setSummaryStatus(db, summary.id, 'done')

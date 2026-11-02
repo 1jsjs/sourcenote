@@ -1,8 +1,16 @@
 import type { DatabaseSync } from 'node:sqlite'
 import type { AppLanguage, Correction, CorrectionProgressEvent } from '../shared/types'
 import {
+  isLectureLanguage,
+  isNoteLanguage,
+  outputLanguageName,
+  resolveOutputLanguage,
+  type LectureLanguage,
+} from '../shared/languages'
+import {
   deletePendingCorrections,
   getCorrection,
+  getNote,
   insertCorrections,
   listCorrections,
   listNotePages,
@@ -10,7 +18,7 @@ import {
   setCorrectionStatus,
   type NewCorrection,
 } from './db'
-import { DEFAULT_SUMMARY_MODEL, formatSegmentLine } from './grounding'
+import { DEFAULT_SUMMARY_MODEL, formatSegmentLine, promptForOutput } from './grounding'
 import { langMsg } from './lang'
 import type { ChatMessage, MetaApi } from './meta-api'
 
@@ -43,36 +51,41 @@ export const CORRECTION_SYSTEM_PROMPT =
   'Write the reason in Korean. ' +
   'Reply in Korean.'
 
+/** English variant of the correction prompt (reason and reply in English). */
+export const CORRECTION_SYSTEM_PROMPT_EN =
+  'You are a transcription proofreader for lecture transcripts. ' +
+  'Fix ONLY speech-recognition errors:\n' +
+  '(1) term: misheard technical terms -> the correct spelling, ' +
+  'preferring the exact spelling used on the slides when present ' +
+  '(e.g. Korean phonetic spellings like 러닝 레이트 -> learning rate, ' +
+  'or misheard words like "gradient decent" -> "gradient descent"). ' +
+  'Keep normal words as they are; ' +
+  'only convert technical terms that the slides spell differently or that are clearly jargon.\n' +
+  'If a longer phrase contains a shorter one, propose only the longer phrase for that occurrence.\n' +
+  'Never delete a whole segment; for duplicates remove only the repeated words.\n' +
+  '(2) duplicate: accidental repeated words.\n' +
+  '(3) typo: obvious misrecognitions with a clear intended word.\n' +
+  'Never paraphrase, never add or remove meaning, never change numbers. ' +
+  '`before` must be copied exactly from the segment text and be as short as possible ' +
+  '(just the wrong words); one item per occurrence. ' +
+  'Write the reason in English. ' +
+  'Reply in English.'
+
 /**
- * Correction system prompt in the requested language. The Korean rule
- * (Hangul phonetic spellings of English terms -> English) is kept, phrased
- * generically so the same prompt also works for English lectures: misheard
- * technical terms are fixed against the slide spelling, plus accidental
- * repeats and obvious typos.
+ * Correction system prompt. The Korean variant carries the Korean-specific
+ * rule (Hangul phonetic spellings of English terms -> English), so it is used
+ * only when the lecture is Korean ('default'/'Korean') AND the output is
+ * Korean; every other combination uses the English variant re-pointed at the
+ * output language.
  */
-export function correctionSystemPrompt(language: AppLanguage): string {
-  if (language === 'en') {
-    return (
-      'You are a transcription proofreader for lecture transcripts. ' +
-      'Fix ONLY speech-recognition errors:\n' +
-      '(1) term: misheard technical terms -> the correct spelling, ' +
-      'preferring the exact spelling used on the slides when present ' +
-      '(e.g. Korean phonetic spellings like 러닝 레이트 -> learning rate, ' +
-      'or misheard words like "gradient decent" -> "gradient descent"). ' +
-      'Keep normal words as they are; ' +
-      'only convert technical terms that the slides spell differently or that are clearly jargon.\n' +
-      'If a longer phrase contains a shorter one, propose only the longer phrase for that occurrence.\n' +
-      'Never delete a whole segment; for duplicates remove only the repeated words.\n' +
-      '(2) duplicate: accidental repeated words.\n' +
-      '(3) typo: obvious misrecognitions with a clear intended word.\n' +
-      'Never paraphrase, never add or remove meaning, never change numbers. ' +
-      '`before` must be copied exactly from the segment text and be as short as possible ' +
-      '(just the wrong words); one item per occurrence. ' +
-      'Write the reason in English. ' +
-      'Reply in English.'
-    )
-  }
-  return CORRECTION_SYSTEM_PROMPT
+export function correctionSystemPrompt(
+  outputLanguage: string,
+  lectureLanguage: LectureLanguage = 'default',
+): string {
+  const name = outputLanguageName(outputLanguage)
+  const koreanLecture = lectureLanguage === 'default' || lectureLanguage === 'Korean'
+  if (name === 'Korean' && koreanLecture) return CORRECTION_SYSTEM_PROMPT
+  return promptForOutput(CORRECTION_SYSTEM_PROMPT_EN, name)
 }
 
 export const CORRECTION_SCHEMA_NAME = 'transcript_corrections'
@@ -144,7 +157,8 @@ export interface ValidCorrection extends NewCorrection {
 export function buildCorrectionMessages(
   numberedLines: string[],
   slideTexts: string[] = [],
-  language: AppLanguage = 'ko',
+  outputLanguage: string = 'ko',
+  lectureLanguage: LectureLanguage = 'default',
 ): ChatMessage[] {
   const parts = [...numberedLines]
   if (slideTexts.length > 0) {
@@ -158,7 +172,10 @@ export function buildCorrectionMessages(
     parts.push('Slides:')
     parts.push(kept.join('\n'))
   }
-  return [{ role: 'system', content: correctionSystemPrompt(language) }, { role: 'user', content: parts.join('\n') }]
+  return [
+    { role: 'system', content: correctionSystemPrompt(outputLanguage, lectureLanguage) },
+    { role: 'user', content: parts.join('\n') },
+  ]
 }
 
 /**
@@ -216,7 +233,12 @@ export interface CorrectionPipelineDeps {
   db: DatabaseSync
   metaApi: MetaApi
   model?: string
+  /** UI language for app-side fixed messages and errors. */
   language?: AppLanguage
+  /** AI output language name; defaults to the note's note_language resolved. */
+  outputLanguage?: string
+  /** Lecture language for the prompt variant; defaults to the note's lecture_language. */
+  lectureLanguage?: LectureLanguage
   onProgress?: (event: CorrectionProgressEvent) => void
 }
 
@@ -231,6 +253,16 @@ export async function runCorrectionPipeline(
   const { db, metaApi, onProgress } = deps
   const model = deps.model ?? DEFAULT_SUMMARY_MODEL
   const language: AppLanguage = deps.language ?? 'ko'
+  const note = getNote(db, noteId)
+  const outputLanguage =
+    deps.outputLanguage ??
+    resolveOutputLanguage(
+      note && isNoteLanguage(note.note_language) ? note.note_language : 'app',
+      language,
+    )
+  const lectureLanguage =
+    deps.lectureLanguage ??
+    (note && isLectureLanguage(note.lecture_language) ? note.lecture_language : 'default')
   const report = (stage: CorrectionProgressEvent['stage'], message?: string): void => {
     onProgress?.({ noteId, stage, message })
   }
@@ -250,7 +282,8 @@ export async function runCorrectionPipeline(
       messages: buildCorrectionMessages(
         lines,
         pages.map((p) => p.text),
-        language,
+        outputLanguage,
+        lectureLanguage,
       ),
       responseFormat: { name: CORRECTION_SCHEMA_NAME, schema: CORRECTION_SCHEMA },
     })

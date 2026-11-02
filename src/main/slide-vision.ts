@@ -7,6 +7,7 @@ import { createCanvas } from '@napi-rs/canvas'
 // disableFontFace/useSystemFonts (Korean slide text renders correctly then).
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import type { AppLanguage } from '../shared/types'
+import { outputLanguageName } from '../shared/languages'
 import { BudgetExceededError } from './budget'
 import {
   listNotePageImages,
@@ -14,7 +15,7 @@ import {
   setPageVisualText,
   type NotePageImage,
 } from './db'
-import { MAX_PAGE_CHARS } from './grounding'
+import { MAX_PAGE_CHARS, promptForOutput } from './grounding'
 import type { ChatContentPart, ChatMessage, MetaApi } from './meta-api'
 import { getDataDir, pageImagesDirPath } from './paths'
 
@@ -148,28 +149,30 @@ export async function ensurePageImages(
   }
 }
 
-/** English instructions; the description itself comes back in the summary language. */
-export function slideVisualSystemPrompt(language: AppLanguage): string {
-  return (
-    'You read one lecture slide image. Describe ONLY visual content that the extracted slide text does not already convey: ' +
-    'charts and plots (axis labels and ranges, each series/legend label, the trend of each series, notable values, where curves cross, rise, fall or diverge), ' +
-    'diagrams (boxes, arrows and what connects to what), equations (write them in plain text), tables (headers and cell values), and photos or illustrations. ' +
-    'Do not repeat bullet text that is already in the extracted text. ' +
-    'Describe only what is visible; do not explain, interpret beyond the image, or add outside knowledge. ' +
-    'Use at most 120 words. If the slide has no visual content beyond its text, return an empty string. ' +
-    (language === 'en' ? 'Write in English.' : 'Write in Korean.')
-  )
+const SLIDE_VISUAL_PROMPT_BASE =
+  'You read one lecture slide image. Describe ONLY visual content that the extracted slide text does not already convey: ' +
+  'charts and plots (axis labels and ranges, each series/legend label, the trend of each series, notable values, where curves cross, rise, fall or diverge), ' +
+  'diagrams (boxes, arrows and what connects to what), equations (write them in plain text), tables (headers and cell values), and photos or illustrations. ' +
+  'Do not repeat bullet text that is already in the extracted text. ' +
+  'Describe only what is visible; do not explain, interpret beyond the image, or add outside knowledge. ' +
+  'Use at most 120 words. If the slide has no visual content beyond its text, return an empty string. '
+
+/** English instructions; the description itself comes back in the output language. */
+export function slideVisualSystemPrompt(outputLanguage: string): string {
+  const name = outputLanguageName(outputLanguage)
+  if (name === 'Korean') return SLIDE_VISUAL_PROMPT_BASE + 'Write in Korean.'
+  return promptForOutput(SLIDE_VISUAL_PROMPT_BASE + 'Write in English.', name)
 }
 
 /** Builds the slide-reading messages: the extracted text for context, then the page image. */
 export function buildSlideVisualMessages(
   pageText: string,
   image: ChatContentPart,
-  language: AppLanguage = 'ko',
+  outputLanguage: string = 'ko',
 ): ChatMessage[] {
   const clipped = pageText.length > MAX_PAGE_CHARS ? pageText.slice(0, MAX_PAGE_CHARS) : pageText
   return [
-    { role: 'system', content: slideVisualSystemPrompt(language) },
+    { role: 'system', content: slideVisualSystemPrompt(outputLanguage) },
     {
       role: 'user',
       content: [
@@ -211,7 +214,10 @@ export interface ReadSlideVisualsOptions {
   db: DatabaseSync
   metaApi: MetaApi
   model: string
-  language: AppLanguage
+  /** Resolved AI output language name; drives the prompt and the re-read check. */
+  outputLanguage?: string
+  /** Deprecated alias for outputLanguage ('ko'/'en'); used when outputLanguage is absent. */
+  language?: AppLanguage
   noteId: number
   /** Called with (finished, total) after each page is processed. */
   onProgress?: (finished: number, total: number) => void
@@ -219,17 +225,24 @@ export interface ReadSlideVisualsOptions {
 
 /**
  * Reads each rendered slide page once with Muse Spark vision and stores the
- * description as `pages.visual_text`. Pages without an image file or already
- * read (visual_text NOT NULL) are skipped. At most SLIDE_VISUAL_CONCURRENCY
- * calls are in flight (same worker-pool style as the transcription pipeline).
+ * description as `pages.visual_text` plus the language in `visual_language`.
+ * Pages without an image file are skipped, and pages already read are skipped
+ * unless they were read in a different output language (a language switch
+ * re-reads each page once); rows from before the column existed (NULL) match
+ * any language and are never re-read. At most SLIDE_VISUAL_CONCURRENCY calls
+ * are in flight (same worker-pool style as the transcription pipeline).
  * Per-page failures are logged and skipped (visual_text stays NULL so the
  * next run retries); budget-cap and HTTP 401/403 errors abort by rethrowing.
  */
 export async function readSlideVisuals(opts: ReadSlideVisualsOptions): Promise<void> {
-  const { db, metaApi, model, language, noteId } = opts
+  const { db, metaApi, model, noteId } = opts
+  const outputLanguage = opts.outputLanguage ?? outputLanguageName(opts.language ?? 'ko')
   const todo = listNotePageImages(db, noteId).filter(
     (p): p is NotePageImage & { imagePath: string } =>
-      p.visualText === null && p.imagePath !== null && fs.existsSync(p.imagePath),
+      p.imagePath !== null &&
+      fs.existsSync(p.imagePath) &&
+      (p.visualText === null ||
+        (p.visualLanguage !== null && p.visualLanguage !== outputLanguage)),
   )
   if (todo.length === 0) return
 
@@ -241,10 +254,10 @@ export async function readSlideVisuals(opts: ReadSlideVisualsOptions): Promise<v
   async function readOne(page: NotePageImage & { imagePath: string }): Promise<void> {
     const raw = await metaApi.chat({
       model,
-      messages: buildSlideVisualMessages(page.text, imagePartFromFile(page.imagePath), language),
+      messages: buildSlideVisualMessages(page.text, imagePartFromFile(page.imagePath), outputLanguage),
       responseFormat: { name: SLIDE_VISUAL_SCHEMA_NAME, schema: SLIDE_VISUAL_SCHEMA },
     })
-    setPageVisualText(db, page.pageId, parseSlideVisualPayload(raw))
+    setPageVisualText(db, page.pageId, parseSlideVisualPayload(raw), outputLanguage)
   }
 
   async function worker(): Promise<void> {

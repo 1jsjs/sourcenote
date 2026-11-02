@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
-import type { AppLanguage, NotePage } from '../shared/types'
+import type { NotePage } from '../shared/types'
 import { insertClaimsWithCitations, pageImagePathMap, setClaimVerdict, type NewClaim, type NoteSegment } from './db'
 import {
   applyVerifyResults,
@@ -39,7 +39,8 @@ export interface StoreAndVerifyOptions {
   db: DatabaseSync
   metaApi: MetaApi
   model: string
-  language: AppLanguage
+  /** Resolved AI output language name (prompts and stored fixed reasons). */
+  outputLanguage: string
   summaryId: number
   claims: CitedClaim[]
   segments: NoteSegment[]
@@ -50,7 +51,7 @@ export interface StoreAndVerifyOptions {
 }
 
 export async function storeAndVerifyClaims(opts: StoreAndVerifyOptions): Promise<void> {
-  const { db, metaApi, model, language, claims } = opts
+  const { db, metaApi, model, outputLanguage, claims } = opts
   const uncited = (c: CitedClaim): boolean => c.segmentDbIds.length + c.pageDbIds.length === 0
   const toInsert: NewClaim[] = claims.map((c) => ({
     idx: c.idx,
@@ -83,13 +84,13 @@ export async function storeAndVerifyClaims(opts: StoreAndVerifyOptions): Promise
     }))
     const verifyRaw = await metaApi.chat({
       model,
-      messages: buildVerifyMessages(items, language, citedSlideImages(db, batch, pageByDbId)),
+      messages: buildVerifyMessages(items, outputLanguage, citedSlideImages(db, batch, pageByDbId)),
       responseFormat: { name: VERIFY_SCHEMA_NAME, schema: VERIFY_SCHEMA },
     })
     const resolved = applyVerifyResults(
       items.map((item) => item.claimIdx),
       validateVerifyPayload(verifyRaw),
-      language,
+      outputLanguage,
     )
     for (const r of resolved) {
       const claimId = claimIdByIdx.get(r.claimIdx)

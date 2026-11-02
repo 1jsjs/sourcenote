@@ -143,7 +143,7 @@ describe('pipelines store the output language', () => {
         : { results: [] },
     )
     const summary = await runSummaryPipeline({ db, metaApi: api, language: 'en' }, noteId)
-    expect(summary.language).toBe('en')
+    expect(summary.language).toBe('English')
     expect(chatCalls[0].messages[0].content).toContain('Write the claims in English')
     expect(summary.claims[0].reason).toBe('The cited evidence is not in the sources')
   })
@@ -152,7 +152,7 @@ describe('pipelines store the output language', () => {
     const noteId = seedNote()
     const { api, chatCalls } = fakeChat(() => ({ items: [] }))
     const summary = await runCheckPipeline({ db, metaApi: api, language: 'en' }, noteId, 'My sentence.')
-    expect(summary.language).toBe('en')
+    expect(summary.language).toBe('English')
     expect(chatCalls[0].messages[0].content).toContain('Reply in English')
     expect(summary.claims[0].text).toBe('My sentence.')
     expect(summary.claims[0].reason).toBe('No supporting evidence found in the lecture materials')

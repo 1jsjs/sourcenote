@@ -9,6 +9,7 @@ import {
   type ChunkPlan,
 } from './audio'
 import {
+  getNote,
   getSource,
   insertSegments,
   listSegments,
@@ -16,6 +17,7 @@ import {
   updateSourceStatus,
   type NewSegment,
 } from './db'
+import { isLectureLanguage, lectureLanguageBias } from '../shared/languages'
 import { isRetryableApiError, type MetaApi } from './meta-api'
 import { turnsToSegments, type TranscribeResult } from './transcribe'
 import type { Segment } from '../shared/types'
@@ -156,6 +158,13 @@ export async function runAudioPipeline(deps: PipelineDeps, sourceId: number): Pr
   const source = getSource(db, sourceId)
   if (!source) throw new Error(`소스를 찾을 수 없습니다 (id=${sourceId})`)
 
+  // The note's lecture language decides the transcription language bias for
+  // this source (default: the Korean+English bias, same as before).
+  const note = getNote(db, source.note_id)
+  const lectureLanguage =
+    note && isLectureLanguage(note.lecture_language) ? note.lecture_language : 'default'
+  const languageBias = lectureLanguageBias(lectureLanguage)
+
   const report = (event: Omit<ProgressEvent, 'sourceId'>): void => {
     onProgress?.({ sourceId, ...event })
   }
@@ -183,6 +192,7 @@ export async function runAudioPipeline(deps: PipelineDeps, sourceId: number): Pr
           chunkPath: job.chunkPath,
           chunkDurationMs: job.plan.durationMs,
           fileName: path.basename(job.chunkPath),
+          languageBias,
         }),
       concurrency: deps.transcribeConcurrency ?? resolveTranscribeConcurrency(),
       retryDelayMs: deps.retryDelayMs,

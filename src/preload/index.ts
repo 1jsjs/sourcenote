@@ -18,6 +18,8 @@ const api: SourcenoteApi = {
   listNotes: () => ipcRenderer.invoke('notes:list'),
   createNote: (title) => ipcRenderer.invoke('notes:create', title),
   renameNote: (id, title) => ipcRenderer.invoke('notes:rename', id, title),
+  setNoteLanguages: (id, languages): Promise<Note> =>
+    ipcRenderer.invoke('notes:setLanguages', id, languages),
   deleteNote: (id) => ipcRenderer.invoke('notes:delete', id),
   listSources: (noteId) => ipcRenderer.invoke('sources:list', noteId),
   addAudioSource: (noteId) => ipcRenderer.invoke('sources:addAudio', noteId),

@@ -756,6 +756,47 @@ select {
   font-size: 28px;
 }
 
+/* ---- per-note language selects ---- */
+
+.note-langs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.note-lang {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.note-lang-label {
+  font-size: 12px;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.note-lang-select {
+  height: 26px;
+  padding: 0 6px;
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--page);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  max-width: 220px;
+}
+
+.note-lang-hint {
+  font-size: 11px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
 /* ---- sources row ---- */
 
 .sources-row {

@@ -16,7 +16,7 @@ import type {
   SummaryKind,
   SummaryStatus,
 } from '../shared/types'
-import { isAppLanguage } from '../shared/types'
+import { isLectureLanguage, isNoteLanguage } from '../shared/languages'
 import { langMsg } from './lang'
 
 /**
@@ -134,6 +134,12 @@ const MIGRATIONS: string[] = [
   ALTER TABLE pages ADD COLUMN image_path TEXT;
   ALTER TABLE pages ADD COLUMN visual_text TEXT;
   `,
+  // version 9: per-note lecture/note languages + slide-reading language
+  `
+  ALTER TABLE notes ADD COLUMN lecture_language TEXT NOT NULL DEFAULT 'default';
+  ALTER TABLE notes ADD COLUMN note_language TEXT NOT NULL DEFAULT 'app';
+  ALTER TABLE pages ADD COLUMN visual_language TEXT;
+  `,
 ]
 
 export function openDb(filePath: string): DatabaseSync {
@@ -168,7 +174,13 @@ function migrate(db: DatabaseSync): void {
 export function createNote(db: DatabaseSync, title: string): Note {
   const created = new Date().toISOString()
   const res = db.prepare('INSERT INTO notes (title, created_at) VALUES (?, ?)').run(title, created)
-  return { id: Number(res.lastInsertRowid), title, created_at: created }
+  return {
+    id: Number(res.lastInsertRowid),
+    title,
+    created_at: created,
+    lecture_language: 'default',
+    note_language: 'app',
+  }
 }
 
 export function listNotes(db: DatabaseSync): Note[] {
@@ -209,6 +221,39 @@ export function renameNote(
   }
   db.prepare('UPDATE notes SET title = ? WHERE id = ?').run(trimmed, id)
   return { ...note, title: trimmed }
+}
+
+/**
+ * Updates a note's per-language choices. Values are validated against the
+ * shared supported-language list; invalid ones throw a localized error and
+ * nothing is written. Omitted fields keep their current value.
+ */
+export function setNoteLanguages(
+  db: DatabaseSync,
+  id: number,
+  languages: { lectureLanguage?: unknown; noteLanguage?: unknown },
+  language: AppLanguage = 'ko',
+): Note {
+  const note = getNote(db, id)
+  if (!note) {
+    throw new Error(langMsg(language, '노트를 찾을 수 없습니다.', 'Note not found.'))
+  }
+  const lectureLanguage =
+    languages.lectureLanguage === undefined ? note.lecture_language : languages.lectureLanguage
+  const noteLanguage =
+    languages.noteLanguage === undefined ? note.note_language : languages.noteLanguage
+  if (!isLectureLanguage(lectureLanguage)) {
+    throw new Error(langMsg(language, '지원하지 않는 강의 언어입니다.', 'Unsupported lecture language.'))
+  }
+  if (!isNoteLanguage(noteLanguage)) {
+    throw new Error(langMsg(language, '지원하지 않는 노트 언어입니다.', 'Unsupported note language.'))
+  }
+  db.prepare('UPDATE notes SET lecture_language = ?, note_language = ? WHERE id = ?').run(
+    lectureLanguage,
+    noteLanguage,
+    id,
+  )
+  return { ...note, lecture_language: lectureLanguage, note_language: noteLanguage }
 }
 
 /** True while a note still has work in flight (ingest or summarize/verify). */
@@ -426,7 +471,8 @@ export function createSummary(
   noteId: number,
   model: string,
   kind: SummaryKind = 'auto',
-  language: AppLanguage = 'ko',
+  /** Output language name for new rows; older callers may pass 'ko'/'en'. */
+  language: string = 'ko',
   question: string | null = null,
 ): SummaryRow {
   const created = new Date().toISOString()
@@ -621,6 +667,11 @@ export interface NotePageImage {
   imagePath: string | null
   /** Vision description; null = not read yet, '' = nothing visual beyond text. */
   visualText: string | null
+  /**
+   * Output language the vision description was written in; null for rows
+   * read before this column existed (they match any output language).
+   */
+  visualLanguage: string | null
 }
 
 /** Like listNotePages, plus the main-only image/source paths for the vision step. */
@@ -630,7 +681,7 @@ export function listNotePageImages(db: DatabaseSync, noteId: number): NotePageIm
       'SELECT pg.id AS pageId, pg.source_id AS sourceId, pg.page_no AS pageNo, ' +
         'pg.text AS text, src.display_name AS displayName, ' +
         'src.original_path AS originalPath, pg.image_path AS imagePath, ' +
-        'pg.visual_text AS visualText ' +
+        'pg.visual_text AS visualText, pg.visual_language AS visualLanguage ' +
         'FROM pages pg JOIN sources src ON src.id = pg.source_id ' +
         "WHERE src.note_id = ? AND src.kind = 'pdf' AND src.status = 'done' " +
         'ORDER BY src.id, pg.page_no',
@@ -644,9 +695,21 @@ export function setPageImagePath(db: DatabaseSync, pageId: number, imagePath: st
   db.prepare('UPDATE pages SET image_path = ? WHERE id = ?').run(imagePath, pageId)
 }
 
-/** Stores the vision description of a page ('' when nothing visual was found). */
-export function setPageVisualText(db: DatabaseSync, pageId: number, visualText: string): void {
-  db.prepare('UPDATE pages SET visual_text = ? WHERE id = ?').run(visualText, pageId)
+/**
+ * Stores the vision description of a page ('' when nothing visual was found)
+ * together with the output language it was written in, when known.
+ */
+export function setPageVisualText(
+  db: DatabaseSync,
+  pageId: number,
+  visualText: string,
+  visualLanguage: string | null = null,
+): void {
+  db.prepare('UPDATE pages SET visual_text = ?, visual_language = ? WHERE id = ?').run(
+    visualText,
+    visualLanguage,
+    pageId,
+  )
 }
 
 /** Absolute image paths of the given pages (only rows with image_path set). */
@@ -720,11 +783,12 @@ function loadSummary(db: DatabaseSync, summary: SummaryRow): Summary {
     pageCitations: pageCiteStmt.all(c.id) as unknown as ClaimPageCitation[],
   }))
 
-  const language: AppLanguage = isAppLanguage(
-    (summary as { language?: unknown }).language,
-  )
-    ? (summary as { language?: AppLanguage }).language ?? 'ko'
-    : 'ko'
+  // New rows store a language name ('Korean', 'Vietnamese', ...); older rows
+  // may carry 'ko'/'en'. Either way the stored string passes through, and
+  // only a missing value (pre-v6 rows) falls back to 'ko'.
+  const storedLanguage = (summary as { language?: unknown }).language
+  const language =
+    typeof storedLanguage === 'string' && storedLanguage.length > 0 ? storedLanguage : 'ko'
   return {
     id: summary.id,
     noteId: summary.note_id,

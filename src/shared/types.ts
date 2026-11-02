@@ -3,6 +3,8 @@
  * anything from main/preload/renderer so it stays usable everywhere.
  */
 
+import type { LectureLanguage, NoteLanguage } from './languages'
+
 /** App-wide language: UI strings and AI output language together. */
 export type AppLanguage = 'ko' | 'en'
 
@@ -14,6 +16,10 @@ export interface Note {
   id: number
   title: string
   created_at: string
+  /** Per-note transcription language ('default' = Korean+English bias). */
+  lecture_language: LectureLanguage
+  /** Per-note AI output language ('app' = follow the app language). */
+  note_language: NoteLanguage
 }
 
 export type SourceStatus = 'pending' | 'converting' | 'transcribing' | 'done' | 'error'
@@ -135,8 +141,12 @@ export interface Summary {
   createdAt: string
   /** 'auto' = generated summary, 'check' = user-notes check, 'qa' = a lecture question. */
   kind: SummaryKind
-  /** Language the claims/reasons were written in. Older rows read as 'ko'. */
-  language: AppLanguage
+  /**
+   * Language the claims/reasons were written in: a supported language name
+   * ('Korean', 'English', 'Vietnamese', ...) for new rows; older rows may
+   * still carry 'ko'/'en' (read them as Korean/English).
+   */
+  language: string
   /** The student's question (kind 'qa' only); the claims are the cited answer. */
   question: string | null
   claims: Claim[]
@@ -177,6 +187,11 @@ export interface SourcenoteApi {
   createNote(title: string): Promise<Note>
   /** Renames a note (title is trimmed, max 200 chars). */
   renameNote(id: number, title: string): Promise<Note>
+  /** Sets the note's lecture/note languages; returns the updated Note. */
+  setNoteLanguages(
+    id: number,
+    languages: { lectureLanguage?: string; noteLanguage?: string },
+  ): Promise<Note>
   /** Deletes a note with all its data; returns the deleted source ids. */
   deleteNote(id: number): Promise<number[]>
   listSources(noteId: number): Promise<Source[]>
@@ -249,5 +264,6 @@ export interface AppSettings {
 export interface SampleInfo {
   name: string
   title: string
-  language: AppLanguage
+  /** 'ko'/'en' in older sample files, a supported language name in new ones. */
+  language: string
 }

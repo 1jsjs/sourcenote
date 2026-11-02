@@ -25,6 +25,12 @@ import type {
   SummaryProgressEvent,
 } from '../../shared/types'
 import { splitSentences } from '../../shared/sentences'
+import {
+  SUPPORTED_LANGUAGES,
+  languageLabel,
+  type LectureLanguage,
+  type NoteLanguage,
+} from '../../shared/languages'
 import ApiKeyDialog from './ApiKeyDialog'
 import AudioPlayer from './AudioPlayer'
 import Button, { Spinner } from './Button'
@@ -758,6 +764,62 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+/**
+ * The note's two language selects: the lecture language drives the next
+ * transcription (hinted, since running sources keep their bias), the note
+ * language drives every AI output of the note. Options sort by the label in
+ * the current UI language.
+ */
+function NoteLanguageSelects({
+  lang,
+  note,
+  onChange,
+}: {
+  lang: AppLanguage
+  note: Note
+  onChange: (patch: { lectureLanguage?: string; noteLanguage?: string }) => void
+}) {
+  const sorted = [...SUPPORTED_LANGUAGES].sort((a, b) =>
+    languageLabel(a.value, lang).localeCompare(languageLabel(b.value, lang), lang),
+  )
+  return (
+    <div className="note-langs">
+      <label className="note-lang">
+        <span className="note-lang-label">{t(lang, 'lectureLanguageLabel')}</span>
+        <select
+          className="note-lang-select"
+          value={note.lecture_language}
+          onChange={(e) => onChange({ lectureLanguage: e.target.value as LectureLanguage })}
+        >
+          <option value="default">{t(lang, 'lectureLangDefault')}</option>
+          <option value="auto">{t(lang, 'lectureLangAuto')}</option>
+          {sorted.map((l) => (
+            <option key={l.value} value={l.value}>
+              {languageLabel(l.value, lang)}
+            </option>
+          ))}
+        </select>
+        <span className="note-lang-hint">{t(lang, 'lectureLangHint')}</span>
+      </label>
+      <label className="note-lang">
+        <span className="note-lang-label">{t(lang, 'noteLanguageLabel')}</span>
+        <select
+          className="note-lang-select"
+          value={note.note_language}
+          onChange={(e) => onChange({ noteLanguage: e.target.value as NoteLanguage })}
+        >
+          <option value="app">{t(lang, 'noteLangSameAsApp')}</option>
+          {sorted.map((l) => (
+            <option key={l.value} value={l.value}>
+              {languageLabel(l.value, lang)}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  )
+}
+
 export default function App() {
   const [lang, setLang] = useState<AppLanguage>('ko')
   // Screen readers pick their voice from the document language.
@@ -1223,6 +1285,20 @@ export default function App() {
       setNewTitle('')
       await refreshNotes()
       setSelectedNoteId(note.id)
+    } catch (err) {
+      reportError(err)
+    }
+  }
+
+  const handleNoteLanguages = async (patch: {
+    lectureLanguage?: string
+    noteLanguage?: string
+  }): Promise<void> => {
+    if (selectedNoteId === null) return
+    setError(null)
+    try {
+      const updated = await window.sourcenote.setNoteLanguages(selectedNoteId, patch)
+      setNotes((prev) => prev.map((n) => (n.id === updated.id ? updated : n)))
     } catch (err) {
       reportError(err)
     }
@@ -2202,6 +2278,11 @@ export default function App() {
                     {selectedNote.title}
                   </h2>
                 )}
+                <NoteLanguageSelects
+                  lang={lang}
+                  note={selectedNote}
+                  onChange={(patch) => void handleNoteLanguages(patch)}
+                />
               </div>
 
               {sources.length === 0 ? (
