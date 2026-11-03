@@ -121,6 +121,10 @@ describe('sample-note format', () => {
       },
     ])
     setSummaryStatus(db, check.id, 'done')
+    db.prepare('UPDATE summaries SET coverage = ? WHERE id = ?').run(
+      JSON.stringify({ refSummaryId: auto.id, total: 1, missedIdx: [0] }),
+      check.id,
+    )
     return note.id
   }
 
@@ -286,6 +290,13 @@ describe('sample-note format', () => {
       expect(auto?.claims[0].pageCitations[0].text).toBe('Learning Rate')
       const check = getLatestCheck(importDb, note.id)
       expect(check?.claims[0].text).toBe('Loss may diverge.')
+      // The missed key point re-points at the imported summary.
+      expect(sample.summaries.find((x) => x.kind === 'check')?.coverage).toEqual({
+        total: 1,
+        missedIdx: [0],
+      })
+      expect(check?.coverage?.refSummaryId).toBe(auto?.id)
+      expect(check?.coverage?.missed.map((c) => c.text)).toEqual(['The learning rate matters.'])
 
       // Importing twice creates a second copy.
       const again = importSampleNote(importDb, sampleDir, dataDir)

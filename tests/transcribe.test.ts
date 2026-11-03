@@ -4,7 +4,7 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BudgetExceededError, LedgerStore, TRANSCRIBE_MODEL } from '../src/main/budget'
 import { createMetaApi, type MetaApiDeps } from '../src/main/meta-api'
-import { parseTranscribeResponse, turnsToSegments } from '../src/main/transcribe'
+import { cleanTranscriptText, parseTranscribeResponse, turnsToSegments } from '../src/main/transcribe'
 
 /** Real response example from the API docs. */
 const EXAMPLE_RESPONSE = {
@@ -162,6 +162,27 @@ function makeDeps(
     captured,
   }
 }
+
+describe('cleanTranscriptText', () => {
+  it('drops speaker-change tokens and the extra spaces around them', () => {
+    expect(cleanTranscriptText('gradient descent. <|speaker_A|>  The model moves')).toBe(
+      'gradient descent. The model moves',
+    )
+    expect(cleanTranscriptText('<|speaker_B|>안녕하세요')).toBe('안녕하세요')
+    expect(cleanTranscriptText('x < y and y > z')).toBe('x < y and y > z')
+  })
+
+  it('is applied to turn text', () => {
+    const [seg] = turnsToSegments(
+      { sessionId: 's', transcript: '', audioDurationMs: 1000, turns: [{ turnId: 0, startMs: 0, endMs: 1000, transcript: 'a <|speaker_A|> b' }] },
+      0,
+      1000,
+      0,
+      0,
+    )
+    expect(seg.text).toBe('a b')
+  })
+})
 
 describe('meta-api transcribeChunk', () => {
   let chunkPath: string

@@ -221,9 +221,12 @@ function ClaimList({
   pulsedId,
   onCiteSegment,
   onCitePage,
+  variant,
 }: {
   lang: AppLanguage
   claims: Claim[]
+  /** 'missed': key points the notes left out (a "+" mark and a Missed label). */
+  variant?: 'missed'
   /** True only right after a verification run finished (progress event). */
   reveal: boolean
   /** True while a verification run is still going (pending claims show a spinner). */
@@ -233,11 +236,12 @@ function ClaimList({
   onCiteSegment: (sourceId: number, segmentId: number, startMs: number) => void
   onCitePage: (sourceId: number, pageNo: number, displayName: string) => void
 }) {
+  const missed = variant === 'missed'
   return (
     <ul className={reveal ? 'claims reveal' : 'claims'}>
       {claims.map((claim, idx) => {
-        const unsupported = claim.verdict === 'unsupported'
-        const pending = claim.verdict === 'pending'
+        const unsupported = !missed && claim.verdict === 'unsupported'
+        const pending = !missed && claim.verdict === 'pending'
         return (
           <li
             key={claim.id}
@@ -246,7 +250,9 @@ function ClaimList({
             style={{ '--i': idx } as CSSProperties}
           >
             <span className="gutter" aria-hidden="true">
-              {pending ? (
+              {missed ? (
+                <span className="mark-missed">+</span>
+              ) : pending ? (
                 checking === true && (
                   <span className="mark-checking">
                     <Spinner />
@@ -277,6 +283,9 @@ function ClaimList({
               </span>
               {unsupported && (
                 <span className="claim-label">{t(lang, 'notInSources')}</span>
+              )}
+              {missed && (
+                <span className="claim-label claim-label-missed">{t(lang, 'missedMark')}</span>
               )}
               {pending && checking === true && (
                 <span className="claim-label" style={{ color: 'var(--ink-faint)', borderColor: 'var(--chip-line)' }}>
@@ -2666,9 +2675,11 @@ export default function App() {
                         icon={<CheckButtonIcon />}
                         loading={checkRunning}
                         loadingLabel={
-                          checkStage === 'verifying'
-                            ? t(lang, 'verifying')
-                            : t(lang, 'findingEvidence')
+                          checkStage === 'covering'
+                            ? t(lang, 'findingMissed')
+                            : checkStage === 'verifying'
+                              ? t(lang, 'verifying')
+                              : t(lang, 'findingEvidence')
                         }
                         disabled={checkButtonDisabled}
                         disabledReason={checkDisabledReason}
@@ -2703,6 +2714,34 @@ export default function App() {
                           onCiteSegment={handleCiteClick}
                           onCitePage={handlePageCiteClick}
                         />
+                        <div className="missed-block">
+                          {checkResult.coverage === null ? (
+                            <p className="missed-hint">{t(lang, 'missedNeedsSummary')}</p>
+                          ) : (
+                            <>
+                              <h4 className="missed-title">{t(lang, 'missedTitle')}</h4>
+                              <p className="missed-hint">
+                                {checkResult.coverage.missed.length === 0
+                                  ? t(lang, 'missedNone', { total: checkResult.coverage.total })
+                                  : t(lang, 'missedCount', {
+                                      total: checkResult.coverage.total,
+                                      missed: checkResult.coverage.missed.length,
+                                    })}
+                              </p>
+                              {checkResult.coverage.missed.length > 0 && (
+                                <ClaimList
+                                  lang={lang}
+                                  claims={checkResult.coverage.missed}
+                                  reveal={checkReveal}
+                                  variant="missed"
+                                  pulsedId={null}
+                                  onCiteSegment={handleCiteClick}
+                                  onCitePage={handlePageCiteClick}
+                                />
+                              )}
+                            </>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>

@@ -3,6 +3,7 @@ import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import type {
   AppLanguage,
+  CheckCoverage,
   Claim,
   ClaimCitation,
   ClaimPageCitation,
@@ -139,6 +140,10 @@ const MIGRATIONS: string[] = [
   ALTER TABLE notes ADD COLUMN lecture_language TEXT NOT NULL DEFAULT 'default';
   ALTER TABLE notes ADD COLUMN note_language TEXT NOT NULL DEFAULT 'app';
   ALTER TABLE pages ADD COLUMN visual_language TEXT;
+  `,
+  // version 10: key points a notes check found missing (JSON on the check row)
+  `
+  ALTER TABLE summaries ADD COLUMN coverage TEXT;
   `,
 ]
 
@@ -464,6 +469,8 @@ export interface SummaryRow {
   kind: string
   language: string
   question?: string | null
+  /** JSON {refSummaryId, total, missedIdx} on 'check' rows; null otherwise. */
+  coverage?: string | null
 }
 
 export function createSummary(
@@ -745,11 +752,11 @@ export function listQuestionAnswers(db: DatabaseSync, noteId: number): Summary[]
   return rows.map((row) => loadSummary(db, row))
 }
 
-/** A summary row with its claims and their cited segments and pages. */
-function loadSummary(db: DatabaseSync, summary: SummaryRow): Summary {
+/** Claims of one summary with their cited segments and pages, in idx order. */
+function loadClaims(db: DatabaseSync, summaryId: number): Claim[] {
   const claimRows = db
     .prepare('SELECT * FROM claims WHERE summary_id = ? ORDER BY idx')
-    .all(summary.id) as unknown as Array<{
+    .all(summaryId) as unknown as Array<{
     id: number
     idx: number
     text: string
@@ -773,7 +780,7 @@ function loadSummary(db: DatabaseSync, summary: SummaryRow): Summary {
       'JOIN sources src ON src.id = pg.source_id ' +
       'WHERE cc.claim_id = ? ORDER BY pg.id',
   )
-  const claims: Claim[] = claimRows.map((c) => ({
+  return claimRows.map((c) => ({
     id: c.id,
     idx: c.idx,
     text: c.text,
@@ -782,6 +789,54 @@ function loadSummary(db: DatabaseSync, summary: SummaryRow): Summary {
     citations: citeStmt.all(c.id) as unknown as ClaimCitation[],
     pageCitations: pageCiteStmt.all(c.id) as unknown as ClaimPageCitation[],
   }))
+}
+
+/** What a stored coverage JSON says, or null when absent or malformed. */
+export function parseCoverageJson(
+  raw: unknown,
+): { refSummaryId: number; total: number; missedIdx: number[] } | null {
+  if (typeof raw !== 'string' || raw.length === 0) return null
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return null
+  }
+  if (parsed === null || typeof parsed !== 'object') return null
+  const { refSummaryId, total, missedIdx } = parsed as Record<string, unknown>
+  if (!Number.isInteger(refSummaryId) || !Number.isInteger(total)) return null
+  if (!Array.isArray(missedIdx) || !missedIdx.every((i) => Number.isInteger(i))) return null
+  return { refSummaryId: refSummaryId as number, total: total as number, missedIdx: missedIdx as number[] }
+}
+
+/** Resolves a check row's coverage JSON against its reference summary's claims. */
+function loadCoverage(db: DatabaseSync, summary: SummaryRow): CheckCoverage | null {
+  const parsed = parseCoverageJson(summary.coverage)
+  if (parsed === null) return null
+  const missedSet = new Set(parsed.missedIdx)
+  const missed = loadClaims(db, parsed.refSummaryId).filter((c) => missedSet.has(c.idx))
+  return { ...parsed, missedIdx: missed.map((c) => c.idx), missed }
+}
+
+/** Stores which key points of `refSummaryId` the check's notes missed. */
+export function setSummaryCoverage(
+  db: DatabaseSync,
+  summaryId: number,
+  coverage: { refSummaryId: number; total: number; missedIdx: number[] },
+): void {
+  db.prepare('UPDATE summaries SET coverage = ? WHERE id = ?').run(
+    JSON.stringify({
+      refSummaryId: coverage.refSummaryId,
+      total: coverage.total,
+      missedIdx: coverage.missedIdx,
+    }),
+    summaryId,
+  )
+}
+
+/** A summary row with its claims and their cited segments and pages. */
+function loadSummary(db: DatabaseSync, summary: SummaryRow): Summary {
+  const claims = loadClaims(db, summary.id)
 
   // New rows store a language name ('Korean', 'Vietnamese', ...); older rows
   // may carry 'ko'/'en'. Either way the stored string passes through, and
@@ -800,6 +855,7 @@ function loadSummary(db: DatabaseSync, summary: SummaryRow): Summary {
     language,
     question: summary.question ?? null,
     claims,
+    coverage: summary.kind === 'check' ? loadCoverage(db, summary) : null,
   }
 }
 

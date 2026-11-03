@@ -1,14 +1,17 @@
 import type { DatabaseSync } from 'node:sqlite'
-import type { AppLanguage, CheckProgressEvent, Summary } from '../shared/types'
+import type { AppLanguage, CheckProgressEvent, Claim, Summary } from '../shared/types'
 import { isNoteLanguage, outputLanguageName, resolveOutputLanguage } from '../shared/languages'
 import {
   createSummary,
   getLatestCheck,
+  getLatestSummary,
   getNote,
   listNotePages,
   listNoteSegments,
+  setSummaryCoverage,
   setSummaryStatus,
 } from './db'
+import { BudgetExceededError } from './budget'
 import { langMsg } from './lang'
 import {
   DEFAULT_SUMMARY_MODEL,
@@ -216,6 +219,126 @@ export function mapCheckLocate(
   })
 }
 
+// ---------------------------------------------------------------------------
+// coverage: which key points of the verified summary the notes left out
+// ---------------------------------------------------------------------------
+
+/**
+ * Step 3 compares the notes with the key points of the note's latest
+ * verified summary (its supported sentences). The model only returns
+ * indices and booleans, so the shown text is always the verified sentence
+ * with its own citations.
+ */
+export const CHECK_COVERAGE_SYSTEM_PROMPT =
+  "You compare a student's lecture notes with the key points of that lecture. " +
+  "For each numbered key point, decide whether the student's notes already state its " +
+  'main idea, in any wording or language. A note that states the main idea covers the ' +
+  'point even if it leaves out minor details, wording or examples. Set covered=false only ' +
+  'when the notes never state the main idea, merely name the topic, or state something ' +
+  'that contradicts it. Judge every key point once and keep its index as given.'
+
+export const CHECK_COVERAGE_SCHEMA_NAME = 'check_notes_coverage'
+
+export const CHECK_COVERAGE_SCHEMA = {
+  type: 'object',
+  properties: {
+    items: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          point_index: { type: 'integer' },
+          covered: { type: 'boolean' },
+        },
+        required: ['point_index', 'covered'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['items'],
+  additionalProperties: false,
+} as const
+
+/** Builds the coverage chat messages from key points + the user's sentences. */
+export function buildCheckCoverageMessages(points: string[], noteSentences: string[]): ChatMessage[] {
+  const parts = ['Key points:']
+  parts.push(...points.map((p, i) => `Point ${i}: ${p}`))
+  parts.push("Student's notes:")
+  parts.push(...noteSentences.map((s) => `- ${s}`))
+  return [
+    { role: 'system', content: CHECK_COVERAGE_SYSTEM_PROMPT },
+    { role: 'user', content: parts.join('\n') },
+  ]
+}
+
+/**
+ * Point indices the model marked as not covered, ascending and in range.
+ * Points the model skipped count as covered (nothing is claimed missing
+ * without a judgement). Throws a Korean error when the shape is wrong.
+ */
+export function parseCheckCoverage(raw: unknown, pointCount: number): number[] {
+  const items =
+    raw !== null && typeof raw === 'object' && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>).items
+      : undefined
+  if (!Array.isArray(items)) throw new Error('검증 API 응답 형식이 올바르지 않습니다.')
+  const missed = new Set<number>()
+  for (const item of items) {
+    if (item === null || typeof item !== 'object') continue
+    const { point_index: index, covered } = item as Record<string, unknown>
+    if (typeof index !== 'number' || !Number.isInteger(index)) continue
+    if (index < 0 || index >= pointCount) continue
+    if (covered === false) missed.add(index)
+  }
+  return [...missed].sort((a, b) => a - b)
+}
+
+/** Budget-cap and key-refusal failures abort the run; other errors skip coverage. */
+function isFatalCoverageError(err: unknown): boolean {
+  if (err instanceof BudgetExceededError) return true
+  const status = (err as { status?: unknown } | null)?.status
+  return status === 401 || status === 403
+}
+
+/**
+ * Finds the key points the notes missed and stores them on the check row.
+ * Does nothing when the note has no finished summary with verified sentences.
+ */
+export async function storeCheckCoverage(opts: {
+  db: DatabaseSync
+  metaApi: MetaApi
+  model: string
+  noteId: number
+  checkId: number
+  sentences: string[]
+  onCovering: () => void
+}): Promise<void> {
+  const ref = getLatestSummary(opts.db, opts.noteId)
+  if (ref === null || ref.status !== 'done') return
+  const points: Claim[] = ref.claims.filter((c) => c.verdict === 'supported')
+  if (points.length === 0) return
+  opts.onCovering()
+  try {
+    const raw = await opts.metaApi.chat({
+      model: opts.model,
+      messages: buildCheckCoverageMessages(
+        points.map((p) => p.text),
+        opts.sentences,
+      ),
+      responseFormat: { name: CHECK_COVERAGE_SCHEMA_NAME, schema: CHECK_COVERAGE_SCHEMA },
+    })
+    const missed = parseCheckCoverage(raw, points.length)
+    setSummaryCoverage(opts.db, opts.checkId, {
+      refSummaryId: ref.id,
+      total: points.length,
+      missedIdx: missed.map((i) => points[i].idx),
+    })
+  } catch (err) {
+    if (isFatalCoverageError(err)) throw err
+    // The sentence check itself is done; leave coverage unset.
+  }
+}
+
 export interface CheckPipelineDeps {
   db: DatabaseSync
   metaApi: MetaApi
@@ -299,6 +422,17 @@ export async function runCheckPipeline(
       pages,
       zeroCitationReason: checkZeroCitationReason(outputLanguage),
       onVerifying: () => report('verifying'),
+    })
+
+    // 3. Which verified key points of the summary did the notes leave out?
+    await storeCheckCoverage({
+      db,
+      metaApi,
+      model,
+      noteId,
+      checkId: summary.id,
+      sentences,
+      onCovering: () => report('covering'),
     })
 
     setSummaryStatus(db, summary.id, 'done')

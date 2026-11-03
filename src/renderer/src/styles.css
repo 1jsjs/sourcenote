@@ -1126,6 +1126,37 @@ select {
   font-weight: 700;
 }
 
+/* A key point the notes missed: pen ink, "add this", not "wrong". */
+.mark-missed {
+  color: var(--pen);
+  font-weight: 700;
+}
+
+.claim-label.claim-label-missed {
+  color: var(--pen);
+  border-color: var(--pen);
+}
+
+.missed-block {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+}
+
+.missed-title {
+  margin: 0 0 4px;
+  font-family: var(--serif);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.missed-hint {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+
 .margin-line {
   width: 1px;
   background: var(--margin);
@@ -1193,7 +1224,8 @@ select {
 /* ---- verification reveal: marks drop in top-down, red wash sweeps ---- */
 
 .claims.reveal .gutter .mark-ok,
-.claims.reveal .gutter .mark-no {
+.claims.reveal .gutter .mark-no,
+.claims.reveal .gutter .mark-missed {
   opacity: 0;
   animation: mark-in 0.3s ease forwards;
   animation-delay: calc(var(--i, 0) * 40ms);
@@ -1224,7 +1256,8 @@ select {
 
 @media (prefers-reduced-motion: reduce) {
   .claims.reveal .gutter .mark-ok,
-  .claims.reveal .gutter .mark-no {
+  .claims.reveal .gutter .mark-no,
+  .claims.reveal .gutter .mark-missed {
     animation: none;
     opacity: 1;
   }

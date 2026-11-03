@@ -10,7 +10,7 @@ Everything here was written for Sourcenote during the hackathon and may be reuse
 | `demo-slides.pdf` | 5 slides with the English terms. Slide 3 is a loss-curve chart for three learning rates: the lecture only says "look at the graph", so which curve diverges or falls fastest is in the image alone (pdf.js extracts just the legend and axis numbers). Slide 5 adds *Warmup*, which the lecture never says |
 | `demo-slides.html` | Source of the slides (printed to PDF with headless Chrome) |
 | `lecture-script-en.txt`, `demo-slides-en.html` | English version (same voice, 96 s) |
-| `notes/ko-gradient-descent/`, `notes/en-gradient-descent/` | Ready-made sample notes (`sample-note/v1`): transcript, slides, accepted corrections, cited summary, a notes check and answered questions, produced by the real pipeline with Muse Voice Transcribe and Muse Spark (including the slide-image reading). The app opens them without an API key (**Open sample note**). |
+| `notes/ko-gradient-descent/`, `notes/en-gradient-descent/` | Ready-made sample notes (`sample-note/v1`): transcript, slides, accepted corrections, cited summary, a notes check (with the key points the notes missed) and answered questions, produced by the real pipeline with Muse Voice Transcribe and Muse Spark (including the slide-image reading). The app opens them without an API key (**Open sample note**). |
 
 ## Try it from the command line
 

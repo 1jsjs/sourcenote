@@ -85,6 +85,16 @@ export interface SampleSummary {
   model: string
   status: 'summarizing' | 'verifying' | 'done' | 'error'
   claims: SampleClaim[]
+  /**
+   * 'check' only: key points the notes missed, as claim idx values of the
+   * file's 'auto' summary. Absent when coverage was not computed.
+   */
+  coverage?: SampleCoverage
+}
+
+export interface SampleCoverage {
+  total: number
+  missedIdx: number[]
 }
 
 export interface SampleNote {
@@ -286,7 +296,22 @@ function parseSummary(raw: unknown): SampleSummary {
     model: asString(raw, 'model'),
     status,
     claims: asArray(raw, 'claims').map(parseClaim),
+    ...(raw.kind === 'check' && raw.coverage !== undefined
+      ? { coverage: parseCoverage(raw.coverage) }
+      : {}),
   }
+}
+
+function parseCoverage(raw: unknown): SampleCoverage {
+  if (!isRecord(raw)) throw invalid('coverage must be an object')
+  if (typeof raw.total !== 'number' || !Number.isInteger(raw.total)) {
+    throw invalid('coverage "total" must be an integer')
+  }
+  const missedIdx = asArray(raw, 'missedIdx')
+  if (!missedIdx.every((i) => typeof i === 'number' && Number.isInteger(i))) {
+    throw invalid('coverage "missedIdx" must hold integers')
+  }
+  return { total: raw.total, missedIdx: missedIdx as number[] }
 }
 
 /** Validates unknown JSON into a SampleNote. Throws on any shape mismatch. */
@@ -373,6 +398,7 @@ export function serializeSampleNote(db: DatabaseSync, noteId: number): SampleNot
   })
 
   // The latest summary and check, then every answered question in order.
+  // A check's coverage is kept only when it refers to that exported summary.
   const exported: Summary[] = []
   for (const kind of ['auto', 'check'] as const) {
     const summary = getLatestSummaryByKind(db, noteId, kind)
@@ -380,9 +406,15 @@ export function serializeSampleNote(db: DatabaseSync, noteId: number): SampleNot
   }
   exported.push(...listQuestionAnswers(db, noteId).filter((q) => q.status === 'done'))
 
+  const exportedAutoId = exported.find((s) => s.kind === 'auto')?.id
   const summaries: SampleSummary[] = []
   for (const summary of exported) {
+    const coverage =
+      summary.coverage !== null && summary.coverage.refSummaryId === exportedAutoId
+        ? { total: summary.coverage.total, missedIdx: summary.coverage.missedIdx }
+        : undefined
     summaries.push({
+      ...(coverage !== undefined ? { coverage } : {}),
       kind: summary.kind,
       ...(summary.kind === 'qa' && summary.question !== null ? { question: summary.question } : {}),
       language: summary.language,
@@ -532,6 +564,8 @@ export function importSampleNote(db: DatabaseSync, sampleDir: string, dataDir: s
     const pageCiteStmt = db.prepare(
       'INSERT OR IGNORE INTO claim_page_citations (claim_id, page_id) VALUES (?, ?)',
     )
+    const coverageStmt = db.prepare('UPDATE summaries SET coverage = ? WHERE id = ?')
+    let autoSummaryId: number | null = null
     for (const sampleSummary of sample.summaries) {
       const summaryRes = summaryStmt.run(
         noteId,
@@ -544,6 +578,13 @@ export function importSampleNote(db: DatabaseSync, sampleDir: string, dataDir: s
         sampleSummary.question ?? null,
       )
       const summaryId = Number(summaryRes.lastInsertRowid)
+      if (sampleSummary.kind === 'auto') autoSummaryId = summaryId
+      if (sampleSummary.coverage !== undefined && autoSummaryId !== null) {
+        coverageStmt.run(
+          JSON.stringify({ refSummaryId: autoSummaryId, ...sampleSummary.coverage }),
+          summaryId,
+        )
+      }
       for (const claim of sampleSummary.claims) {
         const claimRes = claimStmt.run(summaryId, claim.idx, claim.text, claim.verdict, claim.reason)
         const claimId = Number(claimRes.lastInsertRowid)

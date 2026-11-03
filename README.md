@@ -17,7 +17,7 @@ What it does today:
 - **Summarize with citations**: Muse Spark returns claims under a strict JSON schema;
   each claim must cite numbered transcript segments and/or slide pages.
 - **Verify**: a second Muse Spark call judges each claim against only its cited evidence.
-- **Check my notes**: paste your own notes; each sentence is matched to evidence and verified.
+- **Check my notes**: paste your own notes; each sentence is matched to evidence and verified, and the verified key points of the cited summary that your notes missed are listed with their time and slide links.
 - **Ask the lecture**: ask a question and get a short answer built only from the
   recording and slides; every answer sentence cites its evidence and is verified the
   same way. When the materials do not cover the question, Sourcenote says so instead

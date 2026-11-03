@@ -62,6 +62,14 @@ export function parseTranscribeResponse(raw: unknown): TranscribeResult {
 export type SegmentDraft = NewSegment
 
 /**
+ * Removes control tokens the transcriber can leave inside a turn, such as a
+ * speaker change marker `<|speaker_A|>`, and collapses the spaces around them.
+ */
+export function cleanTranscriptText(text: string): string {
+  return text.replace(/<\|[^|<>]*\|>/g, ' ').replace(/\s{2,}/g, ' ').trim()
+}
+
+/**
  * Maps one chunk's API result to absolute-timeline segments:
  *   start_ms = chunkOffsetMs + turn.startMs  (same for end).
  * Empty/missing turns with a transcript present produce one segment spanning
@@ -82,11 +90,11 @@ export function turnsToSegments(
       idx: idxStart + i,
       startMs: chunkOffsetMs + turn.startMs,
       endMs: chunkOffsetMs + turn.endMs,
-      text: turn.transcript,
+      text: cleanTranscriptText(turn.transcript),
       chunkIndex,
     }))
   }
-  const text = result.transcript.trim()
+  const text = cleanTranscriptText(result.transcript)
   if (text.length === 0) return []
   return [
     {

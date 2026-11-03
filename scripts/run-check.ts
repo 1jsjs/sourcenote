@@ -68,6 +68,20 @@ async function main(): Promise<void> {
       ? `\nVerified ${supported} · Not in sources ${unsupported}`
       : `\n검증됨 ${supported} · 자료에 없음 ${unsupported}`,
   )
+  if (summary.coverage === null) {
+    console.log(
+      lang === 'en'
+        ? 'Missed key points: not computed (no verified summary yet)'
+        : '빠진 핵심: 계산 안 함 (검증된 요약이 아직 없음)',
+    )
+  } else {
+    console.log(
+      lang === 'en'
+        ? `Missed key points: ${summary.coverage.missed.length} of ${summary.coverage.total}`
+        : `빠진 핵심: ${summary.coverage.total}개 중 ${summary.coverage.missed.length}개`,
+    )
+    for (const claim of summary.coverage.missed) printClaim(lang, claim)
+  }
   console.log(
     lang === 'en'
       ? `Total spend: $${ledger.totalUsd.toFixed(4)} / $${budgetCapUsd()}`

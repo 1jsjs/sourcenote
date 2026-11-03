@@ -1,4 +1,4 @@
-import { CHECK_LOCATE_SCHEMA_NAME } from './check-pipeline'
+import { CHECK_COVERAGE_SCHEMA_NAME, CHECK_LOCATE_SCHEMA_NAME } from './check-pipeline'
 import { CORRECTION_SCHEMA_NAME } from './correction'
 import { QA_SCHEMA_NAME } from './qa-pipeline'
 import { SUMMARY_SCHEMA_NAME, VERIFY_SCHEMA_NAME } from './grounding'
@@ -127,6 +127,18 @@ function buildFakeLocatePayload(userContent: string): unknown {
   return { items }
 }
 
+/** Fake coverage: every third key point (0, 3, ...) counts as missed. */
+function buildFakeCoveragePayload(userContent: string): unknown {
+  const items: Array<{ point_index: number; covered: boolean }> = []
+  for (const line of userContent.split('\n')) {
+    const m = line.match(/^Point (\d+):/)
+    if (!m) continue
+    const index = Number(m[1])
+    items.push({ point_index: index, covered: index % 3 !== 0 })
+  }
+  return { items }
+}
+
 function buildFakeCorrectionPayload(userContent: string): unknown {
   for (const line of userContent.split('\n')) {
     const num = line.match(/^\[(\d+)\]/)
@@ -182,6 +194,7 @@ export function createFakeMetaApi(env: NodeJS.ProcessEnv = process.env): MetaApi
     }
     if (name === VERIFY_SCHEMA_NAME) return buildFakeVerifyPayload(content)
     if (name === CHECK_LOCATE_SCHEMA_NAME) return buildFakeLocatePayload(content)
+    if (name === CHECK_COVERAGE_SCHEMA_NAME) return buildFakeCoveragePayload(content)
     if (name === CORRECTION_SCHEMA_NAME) return buildFakeCorrectionPayload(content)
     if (name === SLIDE_VISUAL_SCHEMA_NAME) return { visual: '' }
     return '[fake] reply'

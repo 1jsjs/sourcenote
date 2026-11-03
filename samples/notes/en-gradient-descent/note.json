@@ -13,8 +13,8 @@
           "idx": 0,
           "startMs": 140,
           "endMs": 10780,
-          "text": "Today we're going to talk about gradient descent. <|speaker_A|>  The model moves its weights a little at a time in the direction that lowers the loss function.",
-          "originalText": "Today we're going to talk about gradient descent. <|speaker_A|>  The model moves its weights a little at a time in the direction that lowers the lowers the loss function.",
+          "text": "Today we're going to talk about gradient descent. The model moves its weights a little at a time in the direction that lowers the loss function.",
+          "originalText": "Today we're going to talk about gradient descent. The model moves its weights a little at a time in the direction that lowers the lowers the loss function.",
           "chunkIndex": 0
         },
         {
@@ -412,16 +412,62 @@
       ]
     },
     {
+      "coverage": {
+        "total": 12,
+        "missedIdx": [
+          3,
+          5,
+          7,
+          8,
+          9
+        ]
+      },
       "kind": "check",
-      "language": "en",
+      "language": "English",
       "model": "muse-spark-1.3",
       "status": "done",
       "claims": [
         {
           "idx": 0,
+          "text": "Gradient descent moves the weights step by step in the direction that lowers the loss.",
+          "verdict": "supported",
+          "reason": "Both the transcript and slide p.2 state weights are updated little at a time in the direction that lowers the loss function.",
+          "citations": [
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 0
+            }
+          ],
+          "pageCitations": [
+            {
+              "sourceIndex": 1,
+              "pageNo": 2
+            }
+          ]
+        },
+        {
+          "idx": 1,
+          "text": "The learning rate decides how big each step is.",
+          "verdict": "supported",
+          "reason": "Both the transcript and slide p.2 state the learning rate is the step size or how far it moves in one step.",
+          "citations": [
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 1
+            }
+          ],
+          "pageCitations": [
+            {
+              "sourceIndex": 1,
+              "pageNo": 2
+            }
+          ]
+        },
+        {
+          "idx": 2,
           "text": "If the learning rate is too large, the loss can diverge.",
           "verdict": "supported",
-          "reason": "Both the transcript and the slide p.2 image state that too large a learning rate overshoots the minimum and the loss may diverge.",
+          "reason": "Both the transcript and slide p.2 state too large overshoots the minimum and the loss may or can diverge.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -436,10 +482,10 @@
           ]
         },
         {
-          "idx": 1,
+          "idx": 3,
           "text": "In the graph, the loss falls fastest with a learning rate of 0.001.",
           "verdict": "unsupported",
-          "reason": "The slide p.3 image shows lr=0.1 dropping steeply to near zero while lr=0.001 declines only slowly, contradicting the claim that 0.001 falls fastest.",
+          "reason": "The transcripts do not identify which is fastest and the p.3 image shows lr=0.1 drops steeply while lr=0.001 declines slowly, contradicting the claim.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -458,10 +504,10 @@
           ]
         },
         {
-          "idx": 2,
+          "idx": 4,
           "text": "In the graph, the loss with a learning rate of 1.0 swings up and down and keeps growing.",
           "verdict": "supported",
-          "reason": "The slide p.3 image shows the lr=1.0 curve oscillating up and down with peaks reaching higher values until it exits the top of the plot.",
+          "reason": "The p.3 image shows the lr=1.0 curve oscillating up and down with increasing peaks that exit the top of the plot.",
           "citations": [
             {
               "sourceIndex": 0,
@@ -480,15 +526,33 @@
           ]
         },
         {
-          "idx": 3,
-          "text": "Mini-batch noise always makes training more accurate.",
-          "verdict": "unsupported",
-          "reason": "The cited evidence only says gradient noise can help escape shallow local minima, not that it always makes training more accurate.",
+          "idx": 5,
+          "text": "SGD computes the gradient on a small mini-batch instead of the whole dataset.",
+          "verdict": "supported",
+          "reason": "Both the transcript and slide p.4 state SGD computes the gradient on a small mini-batch instead of the whole or full dataset.",
           "citations": [
             {
               "sourceIndex": 0,
               "segmentIdx": 6
             },
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 7
+            }
+          ],
+          "pageCitations": [
+            {
+              "sourceIndex": 1,
+              "pageNo": 4
+            }
+          ]
+        },
+        {
+          "idx": 6,
+          "text": "Mini-batch noise always makes training more accurate.",
+          "verdict": "unsupported",
+          "reason": "The evidence only says noise can help escape shallow local minima, not that it always makes training more accurate.",
+          "citations": [
             {
               "sourceIndex": 0,
               "segmentIdx": 8
@@ -502,11 +566,29 @@
           ]
         },
         {
-          "idx": 4,
+          "idx": 7,
           "text": "Warmup increases the learning rate during the first 5 epochs.",
           "verdict": "supported",
-          "reason": "The slide p.5 image explicitly defines Warmup as starting small and increasing the learning rate during the first 5 epochs.",
+          "reason": "Slide p.5 explicitly defines warmup as starting small and increasing the learning rate during the first 5 epochs.",
           "citations": [],
+          "pageCitations": [
+            {
+              "sourceIndex": 1,
+              "pageNo": 5
+            }
+          ]
+        },
+        {
+          "idx": 8,
+          "text": "Next class: momentum and Adam.",
+          "verdict": "supported",
+          "reason": "Both the transcript and slide p.5 state next is momentum and Adam optimizer.",
+          "citations": [
+            {
+              "sourceIndex": 0,
+              "segmentIdx": 12
+            }
+          ],
           "pageCitations": [
             {
               "sourceIndex": 1,

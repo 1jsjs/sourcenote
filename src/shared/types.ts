@@ -150,6 +150,24 @@ export interface Summary {
   /** The student's question (kind 'qa' only); the claims are the cited answer. */
   question: string | null
   claims: Claim[]
+  /**
+   * Check runs only ('check'): which key points of the cited summary the
+   * student's notes left out. null when not computed (no verified summary
+   * existed at check time, or the coverage step failed).
+   */
+  coverage: CheckCoverage | null
+}
+
+/** Key points of a verified summary that a notes check found missing. */
+export interface CheckCoverage {
+  /** The 'auto' summary whose verified sentences served as key points. */
+  refSummaryId: number
+  /** Number of verified key points compared against the notes. */
+  total: number
+  /** `idx` of each key point the notes missed. */
+  missedIdx: number[]
+  /** The missed key points themselves, with their citations, in idx order. */
+  missed: Claim[]
 }
 
 export type SummaryKind = 'auto' | 'check' | 'qa'
@@ -163,7 +181,7 @@ export interface SummaryProgressEvent {
 }
 
 /** Stage of the "check my notes" pipeline, sent over `check:progress`. */
-export type CheckStage = 'locating' | 'verifying' | 'done' | 'error'
+export type CheckStage = 'locating' | 'verifying' | 'covering' | 'done' | 'error'
 
 /** Sent over the `check:progress` IPC channel. */
 export interface CheckProgressEvent {
