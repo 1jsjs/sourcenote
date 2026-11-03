@@ -140,6 +140,15 @@ export function UploadIcon() {
   )
 }
 
+export function CameraIcon() {
+  return (
+    <Base>
+      <path d="M2.5 5.5a1 1 0 0 1 1-1h1.8l1-1.5h3.4l1 1.5h1.8a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1z" />
+      <circle cx="8" cy="8.5" r="2.3" />
+    </Base>
+  )
+}
+
 export function TrashIcon() {
   return (
     <Base>

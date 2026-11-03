@@ -35,6 +35,7 @@ import ApiKeyDialog from './ApiKeyDialog'
 import AudioPlayer from './AudioPlayer'
 import Button, { Spinner } from './Button'
 import {
+  CameraIcon,
   CheckButtonIcon,
   ChevronRightIcon,
   CloseIcon,
@@ -872,6 +873,8 @@ export default function App() {
   const [qaRevealId, setQaRevealId] = useState<number | null>(null)
   const [checkResult, setCheckResult] = useState<Summary | null>(null)
   const [checkRunning, setCheckRunning] = useState(false)
+  /** True while a photo/PDF of notes is being read into the box. */
+  const [notesImporting, setNotesImporting] = useState(false)
   const leftPaneRef = useRef<HTMLElement | null>(null)
   const checkSectionRef = useRef<HTMLDivElement | null>(null)
   const [checkStage, setCheckStage] = useState<CheckProgressEvent['stage'] | null>(null)
@@ -1479,6 +1482,29 @@ export default function App() {
         qaNoteRef.current = null
         setQaPending(null)
       }
+    }
+  }
+
+  const handleImportNotes = async (): Promise<void> => {
+    if (notesImporting || checkRunning) return
+    setError(null)
+    setNotesImporting(true)
+    try {
+      const imported = await window.sourcenote.importNotesFile()
+      if (imported === null) return
+      // Append below anything already typed so nothing the student wrote is lost.
+      setCheckText((prev) =>
+        prev.trim().length > 0 ? `${prev.trimEnd()}\n${imported.text}` : imported.text,
+      )
+      pushToast(
+        'info',
+        t(lang, 'toastNotesImported', { lines: imported.lines, file: imported.fileName }),
+      )
+      await refreshSpend()
+    } catch (err) {
+      reportError(err)
+    } finally {
+      setNotesImporting(false)
     }
   }
 
@@ -2686,6 +2712,17 @@ export default function App() {
                         onClick={() => void handleRunCheck()}
                       >
                         {t(lang, 'checkButton')}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="md"
+                        icon={<CameraIcon />}
+                        loading={notesImporting}
+                        loadingLabel={t(lang, 'readingNotes')}
+                        disabled={checkRunning || notesImporting}
+                        onClick={() => void handleImportNotes()}
+                      >
+                        {t(lang, 'importNotes')}
                       </Button>
                       {checkRunning && checkStartedAt !== null && (
                         <span className="summary-progress">{formatElapsed(checkStartedAt, now)}</span>

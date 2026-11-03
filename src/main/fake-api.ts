@@ -1,5 +1,6 @@
 import { CHECK_COVERAGE_SCHEMA_NAME, CHECK_LOCATE_SCHEMA_NAME } from './check-pipeline'
 import { CORRECTION_SCHEMA_NAME } from './correction'
+import { HANDWRITTEN_NOTES_SCHEMA_NAME } from './handwriting'
 import { QA_SCHEMA_NAME } from './qa-pipeline'
 import { SUMMARY_SCHEMA_NAME, VERIFY_SCHEMA_NAME } from './grounding'
 import { SLIDE_VISUAL_SCHEMA_NAME } from './slide-vision'
@@ -197,6 +198,9 @@ export function createFakeMetaApi(env: NodeJS.ProcessEnv = process.env): MetaApi
     if (name === CHECK_COVERAGE_SCHEMA_NAME) return buildFakeCoveragePayload(content)
     if (name === CORRECTION_SCHEMA_NAME) return buildFakeCorrectionPayload(content)
     if (name === SLIDE_VISUAL_SCHEMA_NAME) return { visual: '' }
+    if (name === HANDWRITTEN_NOTES_SCHEMA_NAME) {
+      return { lines: ['[fake] handwritten line 1', '[fake] handwritten line 2'] }
+    }
     return '[fake] reply'
   }
 

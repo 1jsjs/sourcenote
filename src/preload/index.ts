@@ -69,6 +69,7 @@ const api: SourcenoteApi = {
     }
   },
   runCheck: (noteId, text) => ipcRenderer.invoke('check:run', noteId, text),
+  importNotesFile: () => ipcRenderer.invoke('check:importNotes'),
   getLatestCheck: (noteId) => ipcRenderer.invoke('check:getLatest', noteId),
   askQuestion: (noteId, question) => ipcRenderer.invoke('qa:ask', noteId, question),
   listQuestions: (noteId) => ipcRenderer.invoke('qa:list', noteId),

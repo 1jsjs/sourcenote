@@ -36,6 +36,7 @@ import {
   setNoteLanguages,
 } from './db'
 import { isFakeApiEnabled } from './fake-api'
+import { NOTE_FILE_EXTENSIONS, readNotesFile } from './handwriting'
 import { clearApiKey, type KeyCipher, KeyStoreError, loadApiKey, saveApiKey } from './key-store'
 import { langMsg } from './lang'
 import { mediaContentTypeForPath, parseMediaSourceUrl, parseRangeHeader } from './media'
@@ -537,6 +538,20 @@ function registerIpc(getWindow: () => BrowserWindow | null): void {
       noteId,
       text,
     )
+  })
+
+  ipcMain.handle('check:importNotes', async () => {
+    const win = getWindow()
+    const options = {
+      title: langMsg(currentLanguage(), '필기 사진 또는 PDF 선택', 'Choose a photo or PDF of your notes'),
+      properties: ['openFile' as const],
+      filters: [{ name: 'Notes', extensions: NOTE_FILE_EXTENSIONS }],
+    }
+    const picked = win
+      ? await dialog.showOpenDialog(win, options)
+      : await dialog.showOpenDialog(options)
+    if (picked.canceled || picked.filePaths.length === 0) return null
+    return readNotesFile({ metaApi, filePath: picked.filePaths[0], language: currentLanguage() })
   })
 
   ipcMain.handle('check:getLatest', (_e, noteId: unknown) =>

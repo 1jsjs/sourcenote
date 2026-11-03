@@ -158,6 +158,15 @@ export interface Summary {
   coverage: CheckCoverage | null
 }
 
+/** Notes read from a photo or PDF, ready for the "Check my notes" box. */
+export interface ImportedNotes {
+  /** One statement per line, in reading order. */
+  text: string
+  lines: number
+  pages: number
+  fileName: string
+}
+
 /** Key points of a verified summary that a notes check found missing. */
 export interface CheckCoverage {
   /** The 'auto' summary whose verified sentences served as key points. */
@@ -251,6 +260,11 @@ export interface SourcenoteApi {
   onCorrectionProgress(cb: (event: CorrectionProgressEvent) => void): () => void
   /** Checks the user's own notes sentences against the lecture evidence. */
   runCheck(noteId: number, text: string): Promise<Summary>
+  /**
+   * Opens a file dialog for a photo or PDF of the student's notes and reads
+   * them with Muse Spark; null when the dialog is cancelled.
+   */
+  importNotesFile(): Promise<ImportedNotes | null>
   getLatestCheck(noteId: number): Promise<Summary | null>
   /** Answers a question from the note's lecture evidence only, with verified citations. */
   askQuestion(noteId: number, question: string): Promise<Summary>
